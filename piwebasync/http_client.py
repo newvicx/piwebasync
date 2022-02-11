@@ -155,9 +155,9 @@ class HTTPClient:
 
         """Send request to Pi Web API server, returns an APIResponse instance"""
 
-        if request.protocol == "Websocket":
-            raise RuntimeError(
-                f"{self.__class__.__name__} does not support the websocket protocol"
+        if request.protocol != "HTTP":
+            raise ValueError(
+                f"Invalid protocol {request.protocol} for {self.__class__.__name__}"
             )
 
         url = request.raw_path if self.has_base_url else request.absolute_url
@@ -199,7 +199,7 @@ class HTTPClient:
         *,
         scheme: str = None,
         host: str = None,
-        port: str = None,
+        port: int = None,
         root: str = None,
         headers: HeaderTypes = None,
         auth: Union[AuthTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
@@ -236,7 +236,7 @@ class HTTPClient:
         *,
         scheme: str = None,
         host: str = None,
-        port: str = None,
+        port: int = None,
         root: str = None,
         headers: HeaderTypes = None,
         auth: Union[AuthTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
@@ -273,7 +273,7 @@ class HTTPClient:
         *,
         scheme: str = None,
         host: str = None,
-        port: str = None,
+        port: int = None,
         root: str = None,
         headers: HeaderTypes = None,
         auth: Union[AuthTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
@@ -310,7 +310,7 @@ class HTTPClient:
         *,
         scheme: str = None,
         host: str = None,
-        port: str = None,
+        port: int = None,
         root: str = None,
         headers: HeaderTypes = None,
         auth: Union[AuthTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
@@ -347,7 +347,7 @@ class HTTPClient:
         *,
         scheme: str = None,
         host: str = None,
-        port: str = None,
+        port: int = None,
         root: str = None,
         headers: HeaderTypes = None,
         auth: Union[AuthTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
