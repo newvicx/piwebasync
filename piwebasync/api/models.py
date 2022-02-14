@@ -130,8 +130,8 @@ class APIResponse(BaseModel):
     """Base model for Pi Web API responses"""
     status_code: int
     url: Union[URL, SafeURL]
-    headers: Headers
     normalize: bool = False
+    headers: Optional[Headers]
 
     class Config:
         extra="allow"
@@ -140,6 +140,7 @@ class APIResponse(BaseModel):
             "status_code": {"exclude": True},
             "url": {"exclude": True},
             "normalize": {"exclude": True},
+            "headers": {"exclude": True},
         }
         json_loads=json_load_content
         json_dumps=json_dump_content

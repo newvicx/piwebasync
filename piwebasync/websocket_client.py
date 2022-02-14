@@ -1,11 +1,13 @@
 import asyncio
 import functools
+import json
 import uuid
 from collections import deque
 from typing import Any, Callable, Optional, Sequence
 
+import orjson
 from websockets.datastructures import HeadersLike
-from websockets.exceptions import ConnectionClosed
+from websockets.exceptions import ConnectionClosedOK
 from websockets.extensions import ClientExtensionFactory
 from websockets.legacy.client import Connect
 from websockets.typing import LoggerLike, Origin, Subprotocol
@@ -13,7 +15,7 @@ from ws_auth import Auth, WebsocketAuthProtocol
 
 from .api.models import APIRequest, APIResponse
 from .api.controllers.base import BaseController
-from .exceptions import MaxConnectionsReached, WebsocketClientError
+from .exceptions import BufferConsumed, MaxConnectionsReached
 
 
 class PIChannel:
@@ -24,55 +26,136 @@ class PIChannel:
         self,
         connection_factory: functools.partial,
         reconnect: bool = False,
-        queue: asyncio.Queue = None,
+        normalize_response_content: bool = False,
         loop: asyncio.AbstractEventLoop = None
     ) -> None:
 
         self.connection_factory = connection_factory
         self.reconnect = reconnect
-        self.queue = queue
+        self.normalize_response_content = normalize_response_content
+        self.loop = loop or asyncio.get_event_loop()
         self.buffer = deque()
+        self.channel_id = uuid.uuid4().hex
+        self.channel_closed = asyncio.Event()
         self.channel_open = asyncio.Event()
-        self.close_channel = asyncio.Event()
-        self.wait_channel_closed = None
-        self._loop = loop or asyncio.get_event_loop()
-        self._id = uuid.uuid4().hex
+        self.channel_closed_waiter = None
+        self.pop_message_waiter = None
+        self.data_transfer_task = None
 
-    async def start(self, request: APIRequest) -> None:
-        if self.reconnect:
-            self._loop.create_task(self.open_reconnect_channel(request))
-        else:
-            self._loop.create_task(self.open_channel(request))
+    async def start(self, url: str, timeout: Union[int, float] = None) -> None:
+        if self.wait_channel_closed is not None:
+            raise ConnectionResetError("Channel already open")
+        self.channel_closed.clear()
+        self.wait_channel_closed = self.loop.create_future()
+        self.loop.create_task(self.open_channel(url))
+        try:
+            await self.channel_open.wait(timeout)
+        except asyncio.CancelledError:
+            pass
 
-    async def open_channel(self, request: APIRequest) -> None:
-        wait_channel_closed = self._loop.create_future()
-        self.wait_channel_closed = wait_channel_closed
-        async with self.connection_factory(APIRequest.absolute_url) as connection:
-            self.data_transfer_task = self._loop.create_task(self.data_transfer(connection))
-            await wait_channel_closed()
-
-    async def open_reconnect_channel(self, request: APIRequest) -> None:
-        wait_channel_closed = self._loop.create_future()
-        self.wait_channel_closed = wait_channel_closed
-        async for connection in self.connection_factory(request.absolute_url):
-            if self.close_channel.is_set():
-                break
-            self.data_transfer_task = self._loop.create_task(self.data_transfer(connection))
-            await wait_channel_closed()
-            continue
-
-    async def data_transfer(self, connection: WebsocketAuthProtocol) -> None:
-        self.channel_open.set()
-        while True:
+    async def open_channel(self, url: str) -> None:
+        async for connection in self.connection_factory(url):
+            channel_closed_waiter = self.loop.create_future()
+            self.channel_closed_waiter = channel_closed_waiter
+            data_transfer_task = self.loop.create_task(self.data_transfer(connection, url))
+            self.data_transfer_task = data_transfer_task
             try:
-                data = await connection.recv()
-            except (ConnectionClosed, asyncio.CancelledError):
-                self.channel_open.clear()
-                if self.wait_channel_closed is not None:
-                    wait_channel_closed = self.wait_channel_closed
-                    wait_channel_closed.set_result(None)
+                await asyncio.wait(
+                    [channel_closed_waiter, data_transfer_task],
+                    return_when=asyncio.FIRST_COMPLETED
+                )
+            finally:
+                if not data_transfer_task.done():
+                    data_transfer_task.cancel()
+                if not channel_closed_waiter.done():
+                    channel_closed_waiter.set_result(None)
+                self.channel_closed_waiter = None
+                self.data_transfer_task = None
+                await connection.close()
+            if self.channel_close_event.is_set():
                 break
+            if not self.reconnect:
+                break
+            continue
+        self.channel_closed.set()
+        self.wait_channel_closed.set_result(None)
+
+    async def data_transfer(self, connection: WebsocketAuthProtocol, url: str) -> None:
+        try:
+            self.channel_open.set()
+            async for message in connection:
+                try:
+                    content = json.loads(message) if isinstance(message, str) else orjson.loads(message)
+                except json.JSONDecodeError:
+                    message = message if isinstance(message, str) else message.decode()
+                    content = {
+                        "Errors": "Unable to parse response content",
+                        "ResponseContent": message
+                    }
+                response = APIResponse(
+                    status_code=101,
+                    url=url,
+                    normalize=self.normalize,
+                    **content
+                )
+                self.buffer.append(response)
+                if self.pop_message_waiter is not None:
+                    self.pop_message_waiter.set_result(None)
+                    self.pop_message_waiter = None
+        except asyncio.CancelledError:
+            pass
+        except ConnectionClosedOK:
+            pass
+        finally:
+            self.channel_open.clear()
+
+    async def close(self) -> None:
+        await self.shutdown()
+        self.buffer.clear()
+
+    async def shutdown(self) -> None:
+        self.channel_closed.set()
+        if self.channel_closed_waiter is not None:
+            self.channel_closed_waiter.set_result(None)
+        await self.wait_channel_closed
+    
+    # Copied from websockets .recv()
+    async def recv(self) -> APIResponse:
+        if self.pop_message_waiter is not None:
+            raise RuntimeError(
+                "cannot call recv while another coroutine "
+                "is already waiting for the next message"
+            )
+        if len(self.buffer) <= 0 and self.channel_closed.is_set():
+            raise BufferConsumed()
+        while len(self.buffer) <= 0:
+            pop_message_waiter = self.loop.create_future()
+            self.pop_message_waiter = pop_message_waiter
+            try:
+                # If asyncio.wait() is canceled, it doesn't cancel
+                # pop_message_waiter and self.transfer_data_task.
+                await asyncio.wait(
+                    [pop_message_waiter, self.transfer_data_task],
+                    return_when=asyncio.FIRST_COMPLETED
+                )
+            finally:
+                self._pop_message_waiter = None
             
+            if not pop_message_waiter.done():
+                return None
+        
+        response = self.buffer.popleft()
+        return response
+
+    async def update(self, url: str) -> None:
+        if not self.channel_closed.is_set():
+            await self.shutdown()
+        await self.start(url)
+
+    
+    async def __aiter__(self):
+        while True:
+            yield await self.recv()
 
 
 class WebsocketClient:

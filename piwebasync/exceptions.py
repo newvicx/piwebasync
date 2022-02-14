@@ -21,3 +21,9 @@ class WebsocketClientError(PIWebAPIException):
 class MaxConnectionsReached(WebsocketClientError):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)
+
+
+class BufferConsumed(WebsocketClientError):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
