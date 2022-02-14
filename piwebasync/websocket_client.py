@@ -1,12 +1,11 @@
 import asyncio
 import functools
+import uuid
 from collections import deque
-from typing import Any, Callable, Optional, Sequence, Union
+from typing import Any, Callable, Optional, Sequence
 
-import websockets
-import ws_auth
-from httpx._client import UseClientDefault, USE_CLIENT_DEFAULT
 from websockets.datastructures import HeadersLike
+from websockets.exceptions import ConnectionClosed
 from websockets.extensions import ClientExtensionFactory
 from websockets.legacy.client import Connect
 from websockets.typing import LoggerLike, Origin, Subprotocol
@@ -15,6 +14,65 @@ from ws_auth import Auth, WebsocketAuthProtocol
 from .api.models import APIRequest, APIResponse
 from .api.controllers.base import BaseController
 from .exceptions import MaxConnectionsReached, WebsocketClientError
+
+
+class PIChannel:
+
+    """Pass"""
+
+    def __init__(
+        self,
+        connection_factory: functools.partial,
+        reconnect: bool = False,
+        queue: asyncio.Queue = None,
+        loop: asyncio.AbstractEventLoop = None
+    ) -> None:
+
+        self.connection_factory = connection_factory
+        self.reconnect = reconnect
+        self.queue = queue
+        self.buffer = deque()
+        self.channel_open = asyncio.Event()
+        self.close_channel = asyncio.Event()
+        self.wait_channel_closed = None
+        self._loop = loop or asyncio.get_event_loop()
+        self._id = uuid.uuid4().hex
+
+    async def start(self, request: APIRequest) -> None:
+        if self.reconnect:
+            self._loop.create_task(self.open_reconnect_channel(request))
+        else:
+            self._loop.create_task(self.open_channel(request))
+
+    async def open_channel(self, request: APIRequest) -> None:
+        wait_channel_closed = self._loop.create_future()
+        self.wait_channel_closed = wait_channel_closed
+        async with self.connection_factory(APIRequest.absolute_url) as connection:
+            self.data_transfer_task = self._loop.create_task(self.data_transfer(connection))
+            await wait_channel_closed()
+
+    async def open_reconnect_channel(self, request: APIRequest) -> None:
+        wait_channel_closed = self._loop.create_future()
+        self.wait_channel_closed = wait_channel_closed
+        async for connection in self.connection_factory(request.absolute_url):
+            if self.close_channel.is_set():
+                break
+            self.data_transfer_task = self._loop.create_task(self.data_transfer(connection))
+            await wait_channel_closed()
+            continue
+
+    async def data_transfer(self, connection: WebsocketAuthProtocol) -> None:
+        self.channel_open.set()
+        while True:
+            try:
+                data = await connection.recv()
+            except (ConnectionClosed, asyncio.CancelledError):
+                self.channel_open.clear()
+                if self.wait_channel_closed is not None:
+                    wait_channel_closed = self.wait_channel_closed
+                    wait_channel_closed.set_result(None)
+                break
+            
 
 
 class WebsocketClient:
@@ -69,7 +127,7 @@ class WebsocketClient:
         self.root = root
         self.reconnect = reconnect
         self._connection_factory = functools.partial(
-            websockets.connect,
+            Connect,
             create_protocol=create_protocol,
             auth=auth,
             logger=logger,
@@ -99,13 +157,13 @@ class WebsocketClient:
         host: str = None,
         port: str = None,
         root: str = None
-    ):
-        
+    ) -> PIChannel:
+        """Pass"""
         if len(self._connections) >= self.MAX_CONNECTIONS:
             raise MaxConnectionsReached(
                 "Maximum simultaneous connections opened. You can add "
                 "additional streams to an existing connection by using "
-                "the .update() method on PIChannel object"
+                "the .update() method on a PIChannel object"
             )
         self._verify_request(
             "GET",
@@ -121,7 +179,7 @@ class WebsocketClient:
         return await self._create_channel(request)
 
     async def _create_channel(self, request: APIRequest) -> PIChannel:
-
+        """Pass"""
         if request.protocol != "Websocket":
             raise ValueError(
                 f"Invalid protocol {request.protocol} for {self.__class__.__name__}"
@@ -129,7 +187,7 @@ class WebsocketClient:
         connection_factory = self._connection_factory
         reconnect = self.reconnect
         loop = self._loop
-        return await PIChannel.connect(request, connection_factory, reconnect, loop)
+        
     
     def _verify_request(
         self,
@@ -138,10 +196,7 @@ class WebsocketClient:
         scheme: str,
         host: str
     ) -> None:
-        """
-        Verifys the resource requested from a BaseController instance supports the HTTP method
-        called by the user. Also checks to see if enough information is present to construct URL
-        """
+        """Pass"""
         if not isinstance(resource, BaseController):
             raise TypeError(f"'resource' must be instance of BaseController. Got {type(resource)}")
         if resource.method != expected_method:
@@ -149,36 +204,5 @@ class WebsocketClient:
         if not self.scheme and not self.host:
             if not scheme and not host:
                 raise ValueError("Must specify a scheme and host")
-
-
-class PIChannel:
-
-    def __init__(
-        self,
-        protocol: WebsocketAuthProtocol,
-        request: APIRequest,
-        connection_factory: Connect,
-        reconnect: bool,
-        loop: asyncio.AbstractEventLoop
-    ) -> None:
-
-        self.protocol = protocol
-        self.request = request
-        self.connection_factory = connection_factory
-        self.reconnect = reconnect
-        self._buffer = deque()
-        self._loop = loop
-
-    @classmethod
-    async def connect(
-        cls,
-        request: APIRequest,
-        connection_factory: Connect,
-        reconnect: bool,
-        loop: asyncio.AbstractEventLoop
-    ) -> "PIChannel":
-        
-        uri = request.absolute_url
-        protocol = await connection_factory(uri)
         
 
