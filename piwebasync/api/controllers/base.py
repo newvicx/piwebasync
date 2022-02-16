@@ -8,7 +8,12 @@ from ...util import (
 
 
 class BaseController:
-
+    """
+    Base class for all controller instances. Provides a standardized
+    API for constructing PI Web API endpoints. Controllers do not
+    handle request headers or request bodys
+    """
+    
     CONTROLLER = None
     SEMI_COLON_PARAMS = ["selected_fields", "annotations"]
     MULTI_INSTANCE_PARAMS = {

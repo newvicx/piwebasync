@@ -20,8 +20,7 @@ from websockets.extensions import ClientExtensionFactory
 from websockets.typing import LoggerLike, Origin, Subprotocol
 from ws_auth import Auth, WebsocketAuthProtocol
 
-from .api.controllers.base import BaseController
-from .api.models import APIResponse
+from .api import BaseController, ChannelResponse
 from .exceptions import ChannelClosed, SHUTDOWN
 
 
@@ -71,6 +70,7 @@ class Channel:
     def __init__(
         self,
         resource: BaseController,
+        *,
         reconnect: bool = False,
         connect_timeout: float = 15,
         normalize_response_content: bool = True,
@@ -159,7 +159,7 @@ class Channel:
         finally:
             self._updating = False
 
-    async def recv(self) -> APIResponse:
+    async def recv(self) -> ChannelResponse:
 
         """
         Receive API response from buffer
@@ -170,7 +170,7 @@ class Channel:
             user specified a data_queue to feed responses to when a message
             is received
         Returns:
-            APIResponse
+            ChannelResponse
         """
 
         if self._channel_closed:
@@ -303,7 +303,7 @@ class Channel:
         
         """
         Receive messages from websocket connection forever, parse messages to
-        APIResponse objects and either buffer the messages or pass to data_queue
+        ChannelResponse objects and either buffer the messages or pass to data_queue
 
         Args:
             protocol (WebsocketAuthProtocol): Websocket connection object
@@ -320,16 +320,16 @@ class Channel:
                 self._pop_message_waiter.set_result(None)
                 self._pop_message_waiter = None
 
-    def _process_message(self, message: Union[str, bytes]) -> APIResponse:
+    def _process_message(self, message: Union[str, bytes]) -> ChannelResponse:
         
         """
-        Parse message from websocket to APIResponse object
+        Parse message from websocket to ChannelResponse object
 
         Args:
             message (Union[str, bytes]): Raw message returned from websocket
 
         Returns:
-            APIResponse: Formatted PI Web API response
+            ChannelResponse: Formatted PI Web API response
         """
         
         try:
@@ -340,8 +340,7 @@ class Channel:
                 "Errors": "Unable to parse response content",
                 "ResponseContent": message
             }
-        return APIResponse(
-            status_code=101,
+        return ChannelResponse(
             url=self.url,
             normalize=self.normalize_response_content,
             **content
@@ -376,7 +375,7 @@ class Channel:
         Iterate on incoming responses
 
         Yields:
-           APIResponse
+           ChannelResponse
 
          Raises:
             - ChannelClosed: Channel was closed by user or system

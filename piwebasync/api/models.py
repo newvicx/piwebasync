@@ -17,7 +17,10 @@ from ..util import(
 
 
 class APIRequest(BaseModel):
-    """Base model for Pi Web API requests"""
+    """
+    Base model for Pi Web API requests. Provides a standardized
+    API for constructing PI Web API endpoints
+    """
     method: str
     root: str
     protocol: str
@@ -128,22 +131,6 @@ class APIRequest(BaseModel):
 
 class APIResponse(BaseModel):
     """Base model for Pi Web API responses"""
-    status_code: int
-    url: Union[URL, SafeURL]
-    normalize: bool = False
-    headers: Optional[Headers]
-
-    class Config:
-        extra="allow"
-        arbitrary_types_allowed=True
-        fields = {
-            "status_code": {"exclude": True},
-            "url": {"exclude": True},
-            "normalize": {"exclude": True},
-            "headers": {"exclude": True},
-        }
-        json_loads=json_load_content
-        json_dumps=json_dump_content
     
     @root_validator(pre=True)
     def handle_web_exception(cls, values: Dict[str, JSONType]) -> Dict[str, JSONType]:
@@ -194,17 +181,37 @@ class APIResponse(BaseModel):
         if self.normalize:
             response = {normalize_camel_case(key): val for key, val in response.items()}
         return {field: search_response_content(field, response) for field in fields}
-    
-    def to_polars(self, *args, **kwargs):
-        """
-        Convert response into a polars dataframe. Implemented by controller
-        response objects based on the expected schema
-        """
-        raise NotImplementedError()
-    
-    def to_pandas(self, *args, **kwargs):
-        """
-        Convert response to pandas dataframe. Implemented by controller
-        response objects based on the expected schema
-        """
-        raise NotImplementedError()
+
+
+class HTTPResponse(APIResponse):
+    status_code: int
+    url: Union[URL, SafeURL]
+    headers: Headers
+    normalize: bool = False
+
+    class Config:
+        extra="allow"
+        arbitrary_types_allowed=True
+        fields = {
+            "status_code": {"exclude": True},
+            "url": {"exclude": True},
+            "normalize": {"exclude": True},
+            "headers": {"exclude": True},
+        }
+        json_loads=json_load_content
+        json_dumps=json_dump_content
+
+
+class ChannelResponse(APIResponse):
+    url: Union[URL, SafeURL]
+    normalize: bool = False
+
+    class Config:
+        extra="allow"
+        arbitrary_types_allowed=True
+        fields = {
+            "url": {"exclude": True},
+            "normalize": {"exclude": True},
+        }
+        json_loads=json_load_content
+        json_dumps=json_dump_content

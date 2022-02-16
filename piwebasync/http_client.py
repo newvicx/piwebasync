@@ -32,8 +32,7 @@ from httpx._types import(
 )
 from httpx_extensions import ExClient
 
-from .api.models import APIRequest, APIResponse
-from .api.controllers.base import BaseController
+from .api import APIRequest, BaseController, HTTPResponse
 from .exceptions import HTTPClientError
 from .httpx_util.hooks import use_safe_url_hook
 
@@ -151,17 +150,17 @@ class HTTPClient:
         follow_redirects: Union[bool, UseClientDefault] = USE_CLIENT_DEFAULT,
         timeout: Union[TimeoutTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
         extensions: dict = None,
-    ) -> APIResponse:
+    ) -> HTTPResponse:
 
         """
-        Send request to Pi Web API server, returns an APIResponse instance
+        Send request to Pi Web API server, returns an HTTPResponse instance
 
         Raises:
             ValueError: Tried to send a websocket request over the HTTPClient
             HTTPClientError: Error occurred in the underlying client object
 
         Returns:
-            APIResponse
+            HTTPResponse
         """
 
         if request.protocol != "HTTP":
@@ -193,7 +192,7 @@ class HTTPClient:
                 "Errors": "Unable to parse response content",
                 "ResponseContent": response.content.decode()
             }
-        return APIResponse(
+        return HTTPResponse(
             status_code=response.status_code,
             url=response.url,
             headers=response.headers,
@@ -215,18 +214,18 @@ class HTTPClient:
         follow_redirects: Union[bool, UseClientDefault] = USE_CLIENT_DEFAULT,
         timeout: Union[TimeoutTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
         extensions: dict = None,
-    ) -> APIResponse:
+    ) -> HTTPResponse:
 
         """
         Construct and send GET request from BaseController instance, returns an
-        APIResponse instance
+        HTTPResponse instance
 
         Raises:
             ValueError: Tried to send a websocket request over the HTTPClient
             HTTPClientError: Error occurred in the underlying client object
 
         Returns:
-            APIResponse
+            HTTPResponse
         """
 
         self._verify_request(
@@ -259,18 +258,18 @@ class HTTPClient:
         follow_redirects: Union[bool, UseClientDefault] = USE_CLIENT_DEFAULT,
         timeout: Union[TimeoutTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
         extensions: dict = None
-    ) -> APIResponse:
+    ) -> HTTPResponse:
         
         """
         Construct and send POST request from BaseController instance, returns an
-        APIResponse instance
+        HTTPResponse instance
 
         Raises:
             ValueError: Tried to send a websocket request over the HTTPClient
             HTTPClientError: Error occurred in the underlying client object
 
         Returns:
-            APIResponse
+            HTTPResponse
         """
 
         self._verify_request(
@@ -303,18 +302,18 @@ class HTTPClient:
         follow_redirects: Union[bool, UseClientDefault] = USE_CLIENT_DEFAULT,
         timeout: Union[TimeoutTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
         extensions: dict = None
-    ) -> APIResponse:
+    ) -> HTTPResponse:
         
         """
         Construct and send PUT request from BaseController instance, returns an
-        APIResponse instance
+        HTTPResponse instance
 
         Raises:
             ValueError: Tried to send a websocket request over the HTTPClient
             HTTPClientError: Error occurred in the underlying client object
 
         Returns:
-            APIResponse
+            HTTPResponse
         """
 
         self._verify_request(
@@ -347,18 +346,18 @@ class HTTPClient:
         follow_redirects: Union[bool, UseClientDefault] = USE_CLIENT_DEFAULT,
         timeout: Union[TimeoutTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
         extensions: dict = None
-    ) -> APIResponse:
+    ) -> HTTPResponse:
 
         """
         Construct and send PATCH request from BaseController instance, returns an
-        APIResponse instance
+        HTTPResponse instance
 
         Raises:
             ValueError: Tried to send a websocket request over the HTTPClient
             HTTPClientError: Error occurred in the underlying client object
 
         Returns:
-            APIResponse
+            HTTPResponse
         """
         
         self._verify_request(
@@ -391,18 +390,18 @@ class HTTPClient:
         follow_redirects: Union[bool, UseClientDefault] = USE_CLIENT_DEFAULT,
         timeout: Union[TimeoutTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
         extensions: dict = None
-    ) -> APIResponse:
+    ) -> HTTPResponse:
 
         """
         Construct and send DELETE request from BaseController instance, returns an
-        APIResponse instance
+        HTTPResponse instance
 
         Raises:
             ValueError: Tried to send a websocket request over the HTTPClient
             HTTPClientError: Error occurred in the underlying client object
 
         Returns:
-            APIResponse
+            HTTPResponse
         """
         
         self._verify_request(

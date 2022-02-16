@@ -1,6 +1,5 @@
 import json
 import re
-import urllib.parse
 from datetime import datetime
 from functools import partial
 from typing import (
