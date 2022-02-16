@@ -18,12 +18,11 @@ class WebsocketClientError(PIWebAPIException):
         super().__init__(*args)
 
 
-class MaxConnectionsReached(WebsocketClientError):
+class ChannelClosed(WebsocketClientError):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)
 
 
-class BufferConsumed(WebsocketClientError):
+class SHUTDOWN(WebsocketClientError):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)
-

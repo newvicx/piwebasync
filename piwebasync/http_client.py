@@ -45,45 +45,45 @@ class HTTPClient:
     An asynchronous HTTP client for making requests to a Pi Web API server.
     This client is built off HTTPX and mimics the API closely. Kerberos and
     NTLM authentication are supported. If using GSSAPI you can use the stock
-    AsyncClient with httpx_gssapi auth handler. If using SSPI, you will need
-    to use the ExClient from httpx_extensions which has an identical API HTTPX
-    but adds additional support for connection management.
+    AsyncClient with httpx_gssapi auth handler (Note this is untested). If using 
+    SSPI, you will need to use the ExClient from httpx_extensions which has an
+    identical API HTTPX but adds additional support for connection management.
 
     Usage:
     >>> async with piwebasync.HTTPClient as client:
     >>>     response = await client.get(Streams.get_recorded(webid))
 
-    Parameters
-    - scheme (Optional[str]): the url scheme to use, either http or https
-    - host (Optional[str]): the host to connect to
-    - port (Optional[str]): the port to connect to
-    - root (Optional[str]): the root path to the Pi Web API ``https://myhost/root``
-    defaults to '/'
-    - safe_chars (Optional[str]): an optional string containing characters which
-    should not be percent encoded when sending the request. urllib.parse.quote is
-    used to achieve this. Note that httpx's event hook system is used to wrap the
-    default URL class before the request is sent and after the response is received.
-    It will always be the first hook executed in both cases.
-    - client (Optional[Union[ExClient, AsyncClient]]): client used to fulfill requests,
-    the default is ExClient. Note that the ExClient only works for HTTP 1.1 requests.
-    - normalize_response_content (Optional[bool]): if true converts top level keys in
-    response content from camel case to snake case (WebId -> web_id). This can be useful
-    in certain situations where you want to access attributes straigt from the response
-    in a pythonic way. For example if normalize_response_content = True, I can access the
-    WebId from a response (if it is in the top level of the body) as an attribute
-    ``web_id = response.web_id``. If normalize_response_content = False you can
-    still access the attribute using camel case ``web_id = response.WebId``
+    Args:
+        - scheme (str): the url scheme to use, either http or https
+        - host (str): the host to connect to
+        - port (str): the port to connect to
+        - root (str): the root path to the Pi Web API ``https://myhost/root``
+        defaults to '/'
+        - safe_chars (str): an optional string containing characters which
+        should not be percent encoded when sending the request. urllib.parse.quote is
+        used to achieve this. Note that httpx's event hook system is used to wrap the
+        default URL class before the request is sent and after the response is received.
+        It will always be the first hook executed in both cases.
+        - client (Union[ExClient, AsyncClient]): client used to fulfill requests,
+        the default is ExClient. Note that the ExClient only works for HTTP 1.1 requests.
+        - normalize_response_content (bool): if true converts top level keys in
+        response content from camel case to snake case (WebId -> web_id). This can be useful
+        in certain situations where you want to access attributes straigt from the response
+        in a pythonic way. For example if normalize_response_content = True, I can access the
+        WebId from a response (if it is in the top level of the body) as an attribute
+        ``web_id = response.web_id``. If normalize_response_content = False you can
+        still access the attribute using camel case ``web_id = response.WebId``
 
-    The rest of parameters are directly from httpx.AsyncClient. Note that when using
+    The rest of arguments come the from httpx.AsyncClient object. Note that when using
     the ExClient though, the 'http1', 'http2', and 'app' parameters are ignored entirely.
-    They are there for compatability with httpx.AsyncClient
+    They are there for compatability with httpx.AsyncClient. To get familiar with HTTPX check
+    out their docs
+    https://www.python-httpx.org/
 
     Visit the Pi Web API reference to get familiar with controllers and their expected responses
     https://docs.osisoft.com/bundle/pi-web-api-reference/page/help.html
 
-    To get familiar with HTTPX check out their docs https://www.python-httpx.org/
-
-    For Pi Web API Channels, use the WebsocketClient
+    For Pi Web API Channels, use the Channel class
     """
 
     def __init__(
@@ -153,7 +153,16 @@ class HTTPClient:
         extensions: dict = None,
     ) -> APIResponse:
 
-        """Send request to Pi Web API server, returns an APIResponse instance"""
+        """
+        Send request to Pi Web API server, returns an APIResponse instance
+
+        Raises:
+            ValueError: Tried to send a websocket request over the HTTPClient
+            HTTPClientError: Error occurred in the underlying client object
+
+        Returns:
+            APIResponse
+        """
 
         if request.protocol != "HTTP":
             raise ValueError(
@@ -211,6 +220,13 @@ class HTTPClient:
         """
         Construct and send GET request from BaseController instance, returns an
         APIResponse instance
+
+        Raises:
+            ValueError: Tried to send a websocket request over the HTTPClient
+            HTTPClientError: Error occurred in the underlying client object
+
+        Returns:
+            APIResponse
         """
 
         self._verify_request(
@@ -248,6 +264,13 @@ class HTTPClient:
         """
         Construct and send POST request from BaseController instance, returns an
         APIResponse instance
+
+        Raises:
+            ValueError: Tried to send a websocket request over the HTTPClient
+            HTTPClientError: Error occurred in the underlying client object
+
+        Returns:
+            APIResponse
         """
 
         self._verify_request(
@@ -285,6 +308,13 @@ class HTTPClient:
         """
         Construct and send PUT request from BaseController instance, returns an
         APIResponse instance
+
+        Raises:
+            ValueError: Tried to send a websocket request over the HTTPClient
+            HTTPClientError: Error occurred in the underlying client object
+
+        Returns:
+            APIResponse
         """
 
         self._verify_request(
@@ -322,6 +352,13 @@ class HTTPClient:
         """
         Construct and send PATCH request from BaseController instance, returns an
         APIResponse instance
+
+        Raises:
+            ValueError: Tried to send a websocket request over the HTTPClient
+            HTTPClientError: Error occurred in the underlying client object
+
+        Returns:
+            APIResponse
         """
         
         self._verify_request(
@@ -359,6 +396,13 @@ class HTTPClient:
         """
         Construct and send DELETE request from BaseController instance, returns an
         APIResponse instance
+
+        Raises:
+            ValueError: Tried to send a websocket request over the HTTPClient
+            HTTPClientError: Error occurred in the underlying client object
+
+        Returns:
+            APIResponse
         """
         
         self._verify_request(
@@ -466,7 +510,9 @@ class HTTPClient:
             )
     
     def _get_base_url(self):
+
         """Constructs a base URL to be used in the httpx/httx_extensions client instance"""
+
         if self.scheme is None or self.host is None:
             return ""
         elif self.port is None:
@@ -483,10 +529,12 @@ class HTTPClient:
         scheme: str,
         host: str
     ) -> None:
+
         """
         Verifys the resource requested from a BaseController instance supports the HTTP method
         called by the user. Also checks to see if enough information is present to construct URL
         """
+        
         if not isinstance(resource, BaseController):
             raise TypeError(f"'resource' must be instance of BaseController. Got {type(resource)}")
         if resource.method != expected_method:
@@ -495,7 +543,6 @@ class HTTPClient:
             raise ValueError("Must specify a scheme and host")
 
     async def aclose(self):
-        """Close client"""
         await self.client.aclose()
 
     async def __aenter__(self):
