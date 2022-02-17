@@ -157,9 +157,9 @@ class APIResponse(BaseModel):
         return values
     
     @root_validator
-    def normalize(cls, values: Dict[str, JSONType]) -> Dict[str, JSONType]:
+    def normalize_validator(cls, values: Dict[str, JSONType]) -> Dict[str, JSONType]:
         """Normalize keys from response body to snake case"""
-        should_normalize = values.get("normalize")
+        should_normalize = values.get("normalize_content")
         if should_normalize:
             return {normalize_response_key(key): val for key, val in values.items()}
         return values
@@ -168,7 +168,7 @@ class APIResponse(BaseModel):
     def raw_response(self) -> bytes:
         """Reproduce raw response content as bytes. Raw response is valid JSON to deserialize"""
         response = self.dict()
-        if self.normalize:
+        if self.normalize_content:
             response = {normalize_camel_case(key): val for key, val in response.items()}
         return orjson.dumps(response)
     
@@ -178,7 +178,7 @@ class APIResponse(BaseModel):
         Define 'fields' using dot notation (Top.Nested.NestedNested)
         """
         response = self.dict()
-        if self.normalize:
+        if self.normalize_content:
             response = {normalize_camel_case(key): val for key, val in response.items()}
         return {field: search_response_content(field, response) for field in fields}
 
@@ -187,7 +187,7 @@ class HTTPResponse(APIResponse):
     status_code: int
     url: Union[URL, SafeURL]
     headers: Headers
-    normalize: bool = False
+    normalize_content: bool = False
 
     class Config:
         extra="allow"
@@ -195,7 +195,7 @@ class HTTPResponse(APIResponse):
         fields = {
             "status_code": {"exclude": True},
             "url": {"exclude": True},
-            "normalize": {"exclude": True},
+            "normalize_content": {"exclude": True},
             "headers": {"exclude": True},
         }
         json_loads=json_load_content
@@ -203,15 +203,15 @@ class HTTPResponse(APIResponse):
 
 
 class ChannelResponse(APIResponse):
-    url: Union[URL, SafeURL]
-    normalize: bool = False
+    url: Union[URL, SafeURL, str]
+    normalize_content: bool = False
 
     class Config:
         extra="allow"
         arbitrary_types_allowed=True
         fields = {
             "url": {"exclude": True},
-            "normalize": {"exclude": True},
+            "normalize_content": {"exclude": True},
         }
         json_loads=json_load_content
         json_dumps=json_dump_content

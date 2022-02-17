@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from collections import deque
 from contextlib import suppress
 from types import TracebackType
@@ -21,9 +22,10 @@ from websockets.typing import LoggerLike, Origin, Subprotocol
 from ws_auth import Auth, WebsocketAuthProtocol
 
 from .api import BaseController, ChannelResponse
-from .exceptions import ChannelClosed, SHUTDOWN
+from .exceptions import ChannelClosed, ReconnectTimeout, SHUTDOWN
 
 
+logger = logging.getLogger(__name__)
 
 class Channel:
 
@@ -73,7 +75,8 @@ class Channel:
         *,
         reconnect: bool = False,
         connect_timeout: float = 15,
-        normalize_response_content: bool = True,
+        reconnect_timeout: float = 3600,
+        normalize_response_content: bool = False,
         auth: Auth = None,
         create_protocol: Callable[[Any], WebsocketAuthProtocol] = None,
         logger: LoggerLike = None,
@@ -98,6 +101,7 @@ class Channel:
         self.url = resource.absolute_url
         self.reconnect = reconnect
         self.connect_timeout = connect_timeout
+        self.reconnect_timeout = reconnect_timeout
         self.normalize_response_content = normalize_response_content
         self.data_queue = data_queue
         self.connect_params = {
@@ -125,6 +129,7 @@ class Channel:
         self._channel_connection_task = None
         self._channel_open = asyncio.Event()
         self._pop_message_waiter = None
+        self._reconnect_watchdog_task = None
         self._shutdown_waiter = None
         self._transfer_data_task = None
         self._transfer_start_waiter = None
@@ -159,7 +164,7 @@ class Channel:
         finally:
             self._updating = False
 
-    async def recv(self) -> ChannelResponse:
+    async def recv(self, timeout: Union[int, float] = None) -> ChannelResponse:
 
         """
         Receive API response from buffer
@@ -187,7 +192,14 @@ class Channel:
             )
 
         while (len(self._buffer)) <= 0:
-            await self._channel_open.wait()
+            try:
+                logger.debug("Waiting for connection open")
+                await asyncio.wait_for(
+                    self._channel_open.wait(),
+                    timeout
+                )
+            except asyncio.TimeoutError:
+                await self.close(exc=ReconnectTimeout)
             pop_message_waiter: asyncio.Future = self.loop.create_future()
             self._pop_message_waiter = pop_message_waiter
             try:
@@ -203,7 +215,7 @@ class Channel:
             if not pop_message_waiter.done():
                 # if channel_connection_task is running it is trying to reconnect
                 if self._channel_connection_task.done():
-                    # during channel update _channel_connection_task will be cancelled
+                    # during channel update _channel_connection_task will be done
                     # but the channel should not be closed
                     if not self._updating:
                         # should raise error that occurred in _channel_connection_task
@@ -212,7 +224,7 @@ class Channel:
 
         return self._buffer.popleft()
 
-    async def close(self) -> None:
+    async def close(self, exc = None) -> None:
 
         """
         Close channel and clear buffer
@@ -222,15 +234,27 @@ class Channel:
             that occurred in _channel_connnection_task
         """
         
+        if self._channel_closed:
+            return
         self._channel_closed = True
         try:
             await self._shutdown()
         except Exception as err:
-            raise ChannelClosed(
-                "Channel closed as a direct result of the above exception"
-            ) from err
+            if exc is not None:
+                raise ChannelClosed(
+                    f"Channel was closed due to exception: {repr(exc)}. An "
+                    "additional exception occurred during shutdown, detailed above"
+                ) from err
+            else:
+                raise ChannelClosed(
+                    "Channel closed as a direct result of the above exception"
+                ) from err
         finally:
             self._buffer.clear()
+        if exc is not None:
+            raise ChannelClosed(
+                "Channel closed as a direct result of the above exception"
+            ) from exc
 
     async def _start(self) -> None:
         
@@ -262,6 +286,9 @@ class Channel:
             self._transfer_start_waiter = None
         
         self._channel_connection_task = channel_connection_task
+        if self.reconnect:
+            reconnect_watchdog = self.loop.create_task(self._reconnect_timeout_watchdog())
+            self._reconnect_watchdog_task = reconnect_watchdog
 
     async def _run(self) -> None:
         
@@ -281,13 +308,17 @@ class Channel:
             try:
                 await asyncio.wait(
                     [shutdown_waiter, transfer_data_task],
-                    return_when=asyncio.FIRST_EXCEPTION
+                    return_when=asyncio.FIRST_COMPLETED
                 )
+                if not shutdown_waiter.done():
+                    raise transfer_data_task.exception()
+                raise shutdown_waiter.exception()
             # _shutdown() called
             except SHUTDOWN:
                 transfer_data_task.cancel()
                 with suppress(asyncio.CancelledError):
-                    await transfer_data_task
+                    await transfer_data_task # wait for protocol close
+                    raise transfer_data_task.exception() # raise and suppress cancelled error
                 return
             # Connection closed unexpectedly, check for reconnect
             except ConnectionClosedError:
@@ -308,17 +339,50 @@ class Channel:
         Args:
             protocol (WebsocketAuthProtocol): Websocket connection object
         """
+        if self._transfer_start_waiter is not None:
+            self._transfer_start_waiter.set_result(None)
+        try:
+            async for message in protocol:
+                try:
+                    response = self._process_message(message)
+                except Exception as err:
+                    raise
+                if self.data_queue is not None:
+                    await self.data_queue.put(response)
+                    continue
+                self._buffer.append(response)
+                if self._pop_message_waiter is not None:
+                    self._pop_message_waiter.set_result(None)
+                    self._pop_message_waiter = None
+        except asyncio.CancelledError:
+            await protocol.close()
+            raise
+        except Exception:
+            if protocol.open:
+                await protocol.close()
+            else:
+                await protocol.wait_closed()
+            raise
+
+    async def _reconnect_timeout_watchdog(self):
         
-        self._transfer_start_waiter.set_result(None)
-        async for message in protocol:
-            response = self._process_message(message)
-            if self.data_queue is not None:
-                await self.data_queue.put(response)
-                continue
-            self._buffer.append(response)
-            if self._pop_message_waiter is not None:
-                self._pop_message_waiter.set_result(None)
-                self._pop_message_waiter = None
+        """
+        A watchdog with a configurable timeout. Sets limit on the time channel
+        can spend tring to reconnect before connection is failed.
+        """
+        
+        while True:
+            logger.debug("Reconnect watchdog active")
+            try:
+                await asyncio.wait_for(
+                    self._channel_open.wait(),
+                    self.reconnect_timeout
+                )
+            except asyncio.TimeoutError:
+                logger.debug("Got reconnect timeout")
+                await self.close(exc=ReconnectTimeout)
+            if self._transfer_data_task is not None:
+                await asyncio.wait([self._transfer_data_task], return_when=asyncio.FIRST_COMPLETED)
 
     def _process_message(self, message: Union[str, bytes]) -> ChannelResponse:
         
@@ -339,10 +403,10 @@ class Channel:
             content = {
                 "Errors": "Unable to parse response content",
                 "ResponseContent": message
-            }
+            }    
         return ChannelResponse(
             url=self.url,
-            normalize=self.normalize_response_content,
+            normalize_content=self.normalize_response_content,
             **content
         )
     
@@ -360,14 +424,28 @@ class Channel:
         """
         
         try:
+            logger.debug("Shutdown called")
             if self._shutdown_waiter is not None:
-                self._shutdown_waiter.set_exception(SHUTDOWN)
-            # could be trying to reconnect
-            elif not self._channel_connection_task.done():
-                self._channel_connection_task.cancel()
-            await self._channel_connection_task
+                self._shutdown_waiter.set_exception(SHUTDOWN())
+
+            if self._reconnect_watchdog_task is not None:
+                if not self._reconnect_watchdog_task.done():
+                    self._reconnect_watchdog_task.cancel()
+                    await self._reconnect_watchdog_task
+                    with suppress(asyncio.CancelledError):
+                        raise self._reconnect_watchdog_task.exception()
+            
+            if self._channel_connection_task is not None:
+                # could be trying to reconnect
+                if not self._channel_connection_task.done():
+                    self._channel_connection_task.cancel()
+                await self._channel_connection_task
+                channel_exception = self._channel_connection_task.exception()
+                if channel_exception is not None:
+                    raise channel_exception
         finally:
             self._channel_connection_task = None
+            self._reconnect_watchdog_task = None
 
     async def __aiter__(self):
         

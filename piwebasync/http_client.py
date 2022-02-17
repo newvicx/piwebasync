@@ -1,6 +1,7 @@
 import functools
 from types import TracebackType
 from typing import(
+    Any,
     Callable,
     List,
     Mapping,
@@ -146,6 +147,7 @@ class HTTPClient:
         request: APIRequest,
         *,
         headers: HeaderTypes = None,
+        json: Any = None,
         auth: Union[AuthTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
         follow_redirects: Union[bool, UseClientDefault] = USE_CLIENT_DEFAULT,
         timeout: Union[TimeoutTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
@@ -172,7 +174,7 @@ class HTTPClient:
         request_to_send = self.client.build_request(
             method=request.method,
             url=url,
-            json=request.body,
+            json=json,
             headers=headers,
             timeout=timeout,
             extensions=extensions
@@ -196,7 +198,7 @@ class HTTPClient:
             status_code=response.status_code,
             url=response.url,
             headers=response.headers,
-            normalize = self.normalize_response_content,
+            normalize_content=self.normalize_response_content,
             **content
         )
         
@@ -254,6 +256,7 @@ class HTTPClient:
         port: int = None,
         root: str = None,
         headers: HeaderTypes = None,
+        json: Any = None,
         auth: Union[AuthTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
         follow_redirects: Union[bool, UseClientDefault] = USE_CLIENT_DEFAULT,
         timeout: Union[TimeoutTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
@@ -283,6 +286,7 @@ class HTTPClient:
         return await self.request(
             request,
             headers=headers,
+            json=json,
             auth=auth,
             follow_redirects=follow_redirects,
             timeout=timeout,
@@ -298,6 +302,7 @@ class HTTPClient:
         port: int = None,
         root: str = None,
         headers: HeaderTypes = None,
+        json: Any = None,
         auth: Union[AuthTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
         follow_redirects: Union[bool, UseClientDefault] = USE_CLIENT_DEFAULT,
         timeout: Union[TimeoutTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
@@ -327,6 +332,7 @@ class HTTPClient:
         return await self.request(
             request,
             headers=headers,
+            json=json,
             auth=auth,
             follow_redirects=follow_redirects,
             timeout=timeout,
@@ -342,6 +348,7 @@ class HTTPClient:
         port: int = None,
         root: str = None,
         headers: HeaderTypes = None,
+        json: Any = None,
         auth: Union[AuthTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
         follow_redirects: Union[bool, UseClientDefault] = USE_CLIENT_DEFAULT,
         timeout: Union[TimeoutTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
@@ -371,6 +378,7 @@ class HTTPClient:
         return await self.request(
             request,
             headers=headers,
+            json=json,
             auth=auth,
             follow_redirects=follow_redirects,
             timeout=timeout,
@@ -469,7 +477,7 @@ class HTTPClient:
             )
         
         if self.client is ExClient:
-            self.client(
+            self.client = self.client(
                 auth=auth,
                 headers=headers,
                 cookies=cookies,
@@ -487,7 +495,7 @@ class HTTPClient:
                 trust_env=trust_env
             )
         else:
-            self.client(
+            self.client = self.client(
                 auth=auth,
                 headers=headers,
                 cookies=cookies,

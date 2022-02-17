@@ -26,3 +26,8 @@ class ChannelClosed(WebsocketClientError):
 class SHUTDOWN(WebsocketClientError):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)
+
+
+class ReconnectTimeout(WebsocketClientError):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
