@@ -26,7 +26,8 @@ Procedure
     - Wait for WatchdogTimeout error to be raised. This should take
     about 10 seconds but could take longer if socket does not close
     immediately and underlying websocket fails on ping timeout
-    - Test passes when WatchdogTimeout error is raised
+    - Test passes when ChannelClosedError is raised due to
+    WatchdogTimeout error
 """
 
 load_dotenv()

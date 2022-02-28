@@ -268,6 +268,12 @@ class APIRequest(BaseModel):
 
 class APIResponse(BaseModel):
     """Base model for Pi Web API responses"""
+
+    class Config:
+        extra="allow"
+        arbitrary_types_allowed=True
+        json_loads=json_load_content
+        json_dumps=json_dump_content
     
     @root_validator(pre=True)
     def handle_web_exception(cls, values: Dict[str, JSONType]) -> Dict[str, JSONType]:

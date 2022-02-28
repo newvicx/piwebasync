@@ -7,7 +7,7 @@ from piwebasync.api import APIRequest, APIResponse, Controller
 HTTP_SCHEME = "http"
 WS_SCHEME = "ws"
 HOST = "mypihost.com"
-ROOT = "/piwebapi"
+ROOT = "piwebapi"
 PORT = 80
 WEBID = "mytestwebid"
 
@@ -69,50 +69,50 @@ class TestController:
 
 
 class TestAPIRequest:
-    @pytest.mark.parameterize(
+    @pytest.mark.parametrize(
         "webid,action,add_path,query,expected",
         [
             (
                 "Test",
                 "TestAction",
                 ["AddPath1", "AddPath2"],
-                {"Query1": "Value"},
-                "root/controller/Test/TestAction/AddPath1/AddPath2?query1=Value"
+                {"query_1": "Value"},
+                "/root/controller/Test/TestAction/AddPath1/AddPath2?query1=Value"
             ),
             (
                 None,
                 "TestAction",
                 ["AddPath1", "AddPath2"],
-                {"Query1": "Value"},
-                "root/controller/TestAction/AddPath1/AddPath2?query1=Value"
+                {"query_1": "Value"},
+                "/root/controller/TestAction/AddPath1/AddPath2?query1=Value"
             ),
             (
                 "Test",
                 None,
                 ["AddPath1", "AddPath2"],
-                {"Query1": "Value"},
-                "root/controller/Test/AddPath1/AddPath2?query1=Value"
+                {"query_1": "Value"},
+                "/root/controller/Test/AddPath1/AddPath2?query1=Value"
             ),
             (
                 "Test",
                 "TestAction",
                 None,
-                {"Query1": "Value"},
-                "root/controller/Test?query1=Value"
+                {"query_1": "Value"},
+                "/root/controller/Test/TestAction?query1=Value"
             ),
             (
                 "Test",
                 "TestAction",
                 ["AddPath1", "AddPath2"],
                 {},
-                "root/controller/Test/TestAction/AddPath1/AddPath2"
+                "/root/controller/Test/TestAction/AddPath1/AddPath2"
             ),
             (
                 None,
                 None,
                 None,
                 {},
-                "root/controller"
+                "/root/controller"
             ),
         ]
     )
@@ -146,10 +146,10 @@ class TestAPIRequest:
             add_path=add_path,
             **query
         )
-        assert request.path == expected
+        assert request.raw_path == expected
 
 
-    def test_method_validation():
+    def test_method_validation(self):
         """Test that invalid HTTP method raises ValidationError"""
         with pytest.raises(ValidationError):
             APIRequest(
@@ -161,7 +161,7 @@ class TestAPIRequest:
                 host="myhost"
             )
         
-    def test_protocol_validation():
+    def test_protocol_validation(self):
         """Test that invalid protocol raises ValidationError"""
         with pytest.raises(ValidationError):
             APIRequest(
@@ -175,7 +175,7 @@ class TestAPIRequest:
 
 
 class TestAPIResponse:
-    def test_web_exception():
+    def test_web_exception(self):
         """Test handling of Web Exception in response body"""
         content = {
             "WebException": {
@@ -193,7 +193,7 @@ class TestAPIResponse:
         assert response.errors == ["Error occurred during writing of the output stream."]
     
 
-    def test_response_normalization():
+    def test_response_normalization(self):
         """Top level attributes in response body should be normalized to snake case"""
 
         content = {

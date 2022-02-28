@@ -288,6 +288,7 @@ class WebsocketClient:
                 await self._close_channel_task
                 try:
                     await self._start()
+                    await asyncio.sleep(0)
                 except asyncio.TimeoutError as err:
                     exc = ChannelUpdateError(
                         "Unable to establish new connection"

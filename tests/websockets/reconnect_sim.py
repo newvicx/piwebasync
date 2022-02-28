@@ -26,7 +26,7 @@ Procedure
     - Confirm channel is reconnected from logs
     - Issue a KeyboardInterrupt
     - Test passes when channel is confirmed reconnected and no errors
-    have been raised besides KeyboardInterrupt and CancelledError
+    have been raised besides KeyboardInterrupt
 """
 
 
@@ -38,7 +38,6 @@ PI_HOST = os.getenv("PI_HOST")
 ROOT = os.getenv("ROOT")
 DATASERVER = os.getenv("DATASERVER")
 PI_POINT = os.getenv("PI_POINT")
-UPDATE_PI_POINT = os.getenv("UPDATE_PI_POINT")
 
 # Use for kerberos or NTLM
 http_auth = NegotiateAuth()

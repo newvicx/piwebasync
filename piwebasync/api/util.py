@@ -13,7 +13,6 @@ from typing import (
 )
 
 import orjson
-from numba import njit
 from pydantic import validator
 
 from ..exceptions import SerializationError
@@ -106,7 +105,6 @@ def search_response_content(field: str, response: JSONType) -> List[JSONType]:
     [[1, 2], [3, 4]]
     """
 
-    @njit
     def extract_nested_fields_from_list(
         nested_fields: List[str],
         subset: List[JSONType],

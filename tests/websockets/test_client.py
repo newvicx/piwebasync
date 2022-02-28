@@ -101,14 +101,22 @@ async def test_channel_iteration():
 
 @pytest.mark.asyncio
 async def test_channel_update_success():
-    """Test channel can be updated without receiver failing"""
+    """
+    Test channel can be updated without receiver failing
+    
+    Note: Pytest raises warnings in this test originating from
+    the websockets.WebsocketCommonProtocol. The test works as
+    expected and when run manually without pytest, no warnings are
+    raised. This might have to do with the way pytest handles
+    the event loop.
+    """
     loop = asyncio.get_event_loop()
     webid_1 = await get_tag_webid(PI_POINT)
     controller = Controller(scheme=WS_SCHEME, host=PI_HOST, root=ROOT)
     request_1 = controller.streams.get_channel(webid_1, include_initial_values=True, heartbeat_rate=2)
     webid_2 = await get_tag_webid(UPDATE_PI_POINT)
     request_2 = controller.streams.get_channel(webid_2, include_initial_values=True, heartbeat_rate=2)
-    async with WebsocketClient(request_1, auth=ws_auth) as channel:
+    async with WebsocketClient(request_1, auth=ws_auth, loop=loop) as channel:
         receive_task = loop.create_task(receiver(channel))
         await asyncio.sleep(4)
         await channel.update(request_2)
@@ -144,7 +152,7 @@ async def test_channel_update_failure():
         host="mybadhost.com",
         root=ROOT
     ).streams.get_channel(webid, include_initial_values=True, heartbeat_rate=2)
-    async with WebsocketClient(request_1, auth=ws_auth) as channel:
+    async with WebsocketClient(request_1, auth=ws_auth, loop=loop) as channel:
         receive_task = loop.create_task(receiver(channel))
         await asyncio.sleep(1)
         try:
@@ -158,31 +166,3 @@ async def test_channel_update_failure():
         except ChannelClosedError:
             pass
     assert channel.is_closed
-
-@pytest.mark.asyncio
-async def test_improper_close_prevents_reopen():
-    """
-    Test that a failed channel which is not properly closed (i.e close()
-    method is not called) raises RuntimeError when an attempt is made to
-    start again
-    """
-    webid = await get_tag_webid(PI_POINT)
-    request_1 = Controller(
-        scheme=WS_SCHEME,
-        host=PI_HOST,
-        root=ROOT
-    ).streams.get_channel(webid, include_initial_values=True, heartbeat_rate=2)
-    request_2 = Controller(
-        scheme=WS_SCHEME,
-        host="mybadhost.com",
-        root=ROOT
-    ).streams.get_channel(webid, include_initial_values=True, heartbeat_rate=2)
-    channel = await WebsocketClient(request_1, auth=ws_auth)
-    response = await channel.recv()
-    assert isinstance(response, WebsocketMessage)
-    try:
-        await channel.update(request_2)
-    except ChannelUpdateError:
-        pass
-    with pytest.raises(RuntimeError):
-        await channel._start()
