@@ -23,11 +23,20 @@ class ChannelClosed(WebsocketClientError):
         super().__init__(*args)
 
 
-class SHUTDOWN(WebsocketClientError):
+class ChannelClosedError(ChannelClosed):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
+class ChannelClosedOK(ChannelClosed):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)
 
 
-class ReconnectTimeout(WebsocketClientError):
+class ChannelUpdateError(WebsocketClientError):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
+
+class WatchdogTimeout(WebsocketClientError):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)

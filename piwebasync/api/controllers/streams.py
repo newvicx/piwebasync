@@ -1,10 +1,10 @@
 from datetime import datetime
 from typing import List, Tuple, Union
 
-from .base import BaseController
+from ...types import APIRequestType, ControllerType
 
 
-class Streams(BaseController):
+class Streams:
 
     """
     https://docs.osisoft.com/bundle/pi-web-api-reference/page/help/controllers/stream.html
@@ -12,23 +12,26 @@ class Streams(BaseController):
 
     CONTROLLER = "streams"
 
-    @classmethod
+    def __init__(self, constructor: ControllerType) -> None:
+        self._constructor = constructor
+
     def get_channel(
-        cls,
+        self,
         webid: str,
         include_initial_values: bool = None,
         heartbeat_rate: int = None,
         web_id_type: str = None
-    ) -> "Streams":
+    ) -> APIRequestType:
 
         """
         https://docs.osisoft.com/bundle/pi-web-api-reference/page/help/controllers/stream/actions/getchannel.html
         """
 
         action = "channel"
-        return cls(
+        return self._constructor._build_request(
             method="GET",
             protocol="Websocket",
+            controller=self.CONTROLLER,
             action=action,
             webid=webid,
             include_initial_values=include_initial_values,
@@ -36,31 +39,30 @@ class Streams(BaseController):
             web_id_type=web_id_type
         )
     
-    @classmethod
     def get_end(
-        cls,
+        self,
         webid: str,
         desired_units: str = None,
         selected_fields: Union[List[str], Tuple[str]] = None
-    ) -> "Streams":
+    ) -> APIRequestType:
 
         """
         https://docs.osisoft.com/bundle/pi-web-api-reference/page/help/controllers/stream/actions/getend.html
         """
 
         action = "end"
-        return cls(
+        return self._constructor._build_request(
             method="GET",
             protocol="HTTP",
+            controller=self.CONTROLLER,
             action=action,
             webid=webid,
             desired_units=desired_units,
             selected_fields=selected_fields
         )
     
-    @classmethod
     def get_interpolated(
-        cls,
+        self,
         webid: str,
         start_time: datetime = None,
         end_time: datetime = None,
@@ -72,16 +74,17 @@ class Streams(BaseController):
         filter_expression: str = None,
         include_filtered_values: bool = None,
         selected_fields: Union[List[str], Tuple[str]] = None
-    ) -> "Streams":
+    ) -> APIRequestType:
 
         """
         https://docs.osisoft.com/bundle/pi-web-api-reference/page/help/controllers/stream/actions/getinterpolated.html
         """
 
         action = "interpolated"
-        return cls(
+        return self._constructor._build_request(
             method="GET",
             protocol="HTTP",
+            controller=self.CONTROLLER,
             action=action,
             webid=webid,
             start_time=start_time,
@@ -96,9 +99,8 @@ class Streams(BaseController):
             selected_fields=selected_fields
         )
     
-    @classmethod
     def get_interpolated_at_times(
-        cls,
+        self,
         webid: str,
         time: Union[List[datetime], Tuple[datetime]],
         time_zone: str = None,
@@ -107,16 +109,17 @@ class Streams(BaseController):
         include_filtered_values: bool = None,
         sort_order: str = None,
         selected_fields: Union[List[str], Tuple[str]] = None
-    ) -> "Streams":
+    ) -> APIRequestType:
 
         """
         https://docs.osisoft.com/bundle/pi-web-api-reference/page/help/controllers/stream/actions/getinterpolatedattimes.html
         """
 
         action="interpolatedattimes"
-        return cls(
+        return self._constructor._build_request(
             method="GET",
             protocol="HTTP",
+            controller=self.CONTROLLER,
             action=action,
             webid=webid,
             times=time,
@@ -128,9 +131,8 @@ class Streams(BaseController):
             selected_fields=selected_fields
         )
     
-    @classmethod
     def get_recorded(
-        cls,
+        self,
         webid: str,
         start_time: datetime = None,
         end_time: datetime = None,
@@ -142,16 +144,17 @@ class Streams(BaseController):
         max_count: int = None,
         selected_fields: Union[List[str], Tuple[str]] = None,
         associations: Union[List[str], Tuple[str]] = None
-    ) -> "Streams":
+    ) -> APIRequestType:
 
         """
         https://docs.osisoft.com/bundle/pi-web-api-reference/page/help/controllers/stream/actions/getrecorded.html
         """
 
         action="recorded"
-        return cls(
+        return self._constructor._build_request(
             method="GET",
             protocol="HTTP",
+            controller=self.CONTROLLER,
             action=action,
             webid=webid,
             start_time=start_time,
@@ -166,9 +169,8 @@ class Streams(BaseController):
             associations=associations
         )
 
-    @classmethod
     def get_recorded_at_time(
-        cls,
+        self,
         webid: str,
         time: datetime,
         time_zone: str = None,
@@ -176,16 +178,17 @@ class Streams(BaseController):
         desired_units: str = None,
         selected_fields: Union[List[str], Tuple[str]] = None,
         associations: Union[List[str], Tuple[str]] = None
-    ) -> "Streams":
+    ) -> APIRequestType:
 
         """
         https://docs.osisoft.com/bundle/pi-web-api-reference/page/help/controllers/stream/actions/getrecordedattime.html
         """
 
         action = "recordedattime"
-        return cls(
+        return self._constructor._build_request(
             method="GET",
             protocol="HTTP",
+            controller=self.CONTROLLER,
             action=action,
             webid=webid,
             time=time,
@@ -196,9 +199,8 @@ class Streams(BaseController):
             associations=associations
         )
     
-    @classmethod
     def get_recorded_at_times(
-        cls,
+        self,
         webid: str,
         time: Union[List[datetime], Tuple[datetime]],
         time_zone: str = None,
@@ -207,16 +209,17 @@ class Streams(BaseController):
         sort_order: str = None,
         selected_fields: Union[List[str], Tuple[str]] = None,
         associations: Union[List[str], Tuple[str]] = None
-    ) -> "Streams":
+    ) -> APIRequestType:
 
         """
         https://docs.osisoft.com/bundle/pi-web-api-reference/page/help/controllers/stream/actions/getrecordedattimes.html
         """
 
         action="recordedattimes"
-        return cls(
+        return self._constructor._build_request(
             method="GET",
             protocol="HTTP",
+            controller=self.CONTROLLER,
             action=action,
             webid=webid,
             times=time,
@@ -228,9 +231,8 @@ class Streams(BaseController):
             associations=associations
         )
 
-    @classmethod
     def get_summary(
-        cls,
+        self,
         webid: str,
         start_time: datetime = None,
         end_time: datetime = None,
@@ -243,16 +245,17 @@ class Streams(BaseController):
         sample_interval: str = None,
         filter_expression: str = None,
         selected_fields: Union[List[str], Tuple[str]] = None,
-    ) -> "Streams":
+    ) -> APIRequestType:
 
         """
         https://docs.osisoft.com/bundle/pi-web-api-reference/page/help/controllers/stream/actions/getsummary.html
         """
 
         action="summary"
-        return cls(
+        return self._constructor._build_request(
             method="GET",
             protocol="HTTP",
+            controller=self.CONTROLLER,
             action=action,
             webid=webid,
             start_time=start_time,
@@ -268,24 +271,24 @@ class Streams(BaseController):
             selected_fields=selected_fields
         )
 
-    @classmethod
     def get_value(
-        cls,
+        self,
         webid: str,
         time: datetime,
         time_zone: str = None,
         desired_units: str = None,
         selected_fields: Union[List[str], Tuple[str]] = None
-    ) -> "Streams":
+    ) -> APIRequestType:
 
         """
         https://docs.osisoft.com/bundle/pi-web-api-reference/page/help/controllers/stream/actions/getvalueadhoc.html
         """
 
         action="value"
-        return cls(
+        return self._constructor._build_request(
             method="GET",
             protocol="HTTP",
+            controller=self.CONTROLLER,
             action=action,
             webid=webid,
             time=time,

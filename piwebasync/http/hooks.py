@@ -1,7 +1,7 @@
 from typing import Union
 import httpx
 
-from .models import SafeURL
+from .safeurl import SafeURL
 
 
 async def use_safe_url_hook(safe: str, obj: Union[httpx.Request, httpx.Response]):

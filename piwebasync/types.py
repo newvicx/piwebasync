@@ -9,6 +9,17 @@ from typing import(
 )
 
 
+class APIRequestType(Protocol):
+    @property
+    def absolute_url(self):
+        ...
+
+
+class ControllerType(Protocol):
+    def _build_request(self, *args, **kwargs):
+        ...
+
+
 class StrCompatible(Protocol):
     def __str__(self):
         ...
@@ -43,3 +54,5 @@ StrType = Union[
     str,
     ConvertsToStr
 ]
+
+QueryStrType = str

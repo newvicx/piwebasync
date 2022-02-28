@@ -1,36 +1,177 @@
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 import orjson
-from httpx import Headers, URL
-from pydantic import BaseModel, ValidationError, root_validator, validator
+from httpx import Headers
+from piwebasync.api.controllers.dataservers import DataServers
+from piwebasync.api.controllers.eventframes import EventFrames
+from pydantic import(
+    BaseModel,
+    ValidationError,
+    root_validator,
+    validator
+)
 
-from ..httpx_util.models import SafeURL
+from .controllers import(
+    AssetDatabases,
+    AssetServers,
+    Attributes,
+    DataServers,
+    Elements,
+    EventFrames,
+    Points,
+    Streams,
+    StreamSets,
+)
 from ..types import JSONType
-from ..util import(
+from .util import(
     json_dump_content,
     json_load_content,
     normalize_camel_case,
     normalize_request_params,
     normalize_response_key,
     search_response_content,
+    serialize_multi_instance,
+    serialize_semi_colon_separated,
 )
+
+
+class Controller:
+    """
+    Base class for all PI Web API controllers. Provides a standardized
+    API for constructing PI Web API endpoints.
+
+    Usage:
+    Method chaining...
+    >>> request = Controller(scheme, host, port, root).streams.get_end(webid)
+    Reuse base url...
+    >>> controller = Controller(scheme, host, port, root)
+    >>> request_1 = controller.streams.get_end(webid)
+    >>> request_2 = controller.points.get_by_path(path)
+    """
+    
+    SEMI_COLON_PARAMS = [
+        "selected_fields",
+        "annotations"
+    ]
+    MULTI_INSTANCE_PARAMS = {
+        "web_id": "webId",
+        "times": "time",
+        "paths": "path",
+        "security_item_many": "securityItem",
+        "user_identity_many": "userIdentity",
+        "severity_many": "severity",
+        "trait_many": "trait",
+        "trait_category_many": "trait_category",
+    }
+
+    def __init__(
+        self,
+        scheme: str,
+        host: str,
+        port: int = None,
+        root: str = "/"
+    ) -> None:
+
+        self.scheme = scheme
+        self.host = host
+        self.port = port
+        self.root = root
+
+    @property
+    def assetdatabases(self) -> AssetDatabases:
+        return AssetDatabases(self)
+
+    @property
+    def assetservers(self) -> AssetServers:
+        return AssetServers(self)
+
+    @property
+    def attributes(self) -> Attributes:
+        return Attributes(self)
+
+    @property
+    def dataservers(self) -> DataServers:
+        return DataServers(self)
+
+    @property
+    def elements(self) -> Elements:
+        return Elements(self)
+
+    @property
+    def eventframes(self) -> EventFrames:
+        return EventFrames(self)
+
+    @property
+    def points(self) -> Points:
+        return Points(self)
+
+    @property
+    def streams(self) -> Streams:
+        return Streams(self)
+
+    @property
+    def streamsets(self) -> StreamSets:
+        return StreamSets(self)
+
+    def _build_request(
+        self,
+        method: str,
+        protocol: str,
+        controller: str,
+        action: str = None,
+        webid: str = None,
+        add_path: List[str] = None,
+        **params: Any
+    ):
+        """Serialize params and return APIRequest instance"""
+        serialized_params = self._serialize_params(params)
+        return APIRequest(
+            root=self.root,
+            method=method,
+            protocol=protocol,
+            controller=controller,
+            scheme=self.scheme,
+            host=self.host,
+            port=self.port,
+            action=action,
+            webid=webid,
+            add_path=add_path,
+            **serialized_params
+        )
+    
+    def _serialize_params(self, params: Dict[str, Any]):
+        """Serialize semi colon and multi instance params to URL safe strings"""
+        # serialize semi colon params
+        for validate in self.SEMI_COLON_PARAMS:
+            param = params.get(validate)
+            if param is not None:
+                serialized = serialize_semi_colon_separated(param)
+                params.update({validate: serialized})
+        # validate multi instance params
+        for validate, key in self.MULTI_INSTANCE_PARAMS.items():
+            param = params.get(validate)
+            if param is not None:
+                serialized = serialize_multi_instance(key, param)
+                params.pop(validate)
+                params.update({key: serialized})
+        return params
 
 
 class APIRequest(BaseModel):
     """
-    Base model for Pi Web API requests. Provides a standardized
-    API for constructing PI Web API endpoints
+    Base model for Pi Web API requests. An API request is passed to
+    client instance to handle the request
     """
-    method: str
     root: str
+    method: str
     protocol: str
-    controller: Optional[str]
-    webid: Optional[str]
-    action: Optional[str]
-    add_path: Optional[List[str]]
-    scheme: Optional[str]
-    host: Optional[str]
+    controller: str
+    scheme: str
+    host: str
     port: Optional[int]
+    action: Optional[str]
+    webid: Optional[str]
+    add_path: Optional[List[str]]
     
     class Config:
         extra="allow"
@@ -86,10 +227,6 @@ class APIRequest(BaseModel):
 
     @property
     def absolute_url(self) -> str:
-        if not self.host or not self.scheme:
-            raise ValueError(
-                "Cannot build absolute url without host and scheme"
-            )
         port = self.port
         if port:
             return f"{self.scheme}://{self.host}:{port}" + self.raw_path
@@ -157,19 +294,15 @@ class APIResponse(BaseModel):
         return values
     
     @root_validator
-    def normalize_validator(cls, values: Dict[str, JSONType]) -> Dict[str, JSONType]:
-        """Normalize keys from response body to snake case"""
-        should_normalize = values.get("normalize_content")
-        if should_normalize:
-            return {normalize_response_key(key): val for key, val in values.items()}
-        return values
+    def normalize_response(cls, values: Dict[str, JSONType]) -> Dict[str, JSONType]:
+        """Normalize top level keys from response body to snake case"""
+        return {normalize_response_key(key): val for key, val in values.items()}
 
     @property
     def raw_response(self) -> bytes:
         """Reproduce raw response content as bytes. Raw response is valid JSON to deserialize"""
         response = self.dict()
-        if self.normalize_content:
-            response = {normalize_camel_case(key): val for key, val in response.items()}
+        response = {normalize_camel_case(key): val for key, val in response.items()}
         return orjson.dumps(response)
     
     def select(self, *fields: str) -> Dict[str, JSONType]:
@@ -178,16 +311,14 @@ class APIResponse(BaseModel):
         Define 'fields' using dot notation (Top.Nested.NestedNested)
         """
         response = self.dict()
-        if self.normalize_content:
-            response = {normalize_camel_case(key): val for key, val in response.items()}
+        response = {normalize_camel_case(key): val for key, val in response.items()}
         return {field: search_response_content(field, response) for field in fields}
 
 
 class HTTPResponse(APIResponse):
     status_code: int
-    url: Union[URL, SafeURL]
+    url: str
     headers: Headers
-    normalize_content: bool = False
 
     class Config:
         extra="allow"
@@ -195,23 +326,20 @@ class HTTPResponse(APIResponse):
         fields = {
             "status_code": {"exclude": True},
             "url": {"exclude": True},
-            "normalize_content": {"exclude": True},
             "headers": {"exclude": True},
         }
         json_loads=json_load_content
         json_dumps=json_dump_content
 
 
-class ChannelResponse(APIResponse):
-    url: Union[URL, SafeURL, str]
-    normalize_content: bool = False
+class WebsocketMessage(APIResponse):
+    url: str
 
     class Config:
         extra="allow"
         arbitrary_types_allowed=True
         fields = {
             "url": {"exclude": True},
-            "normalize_content": {"exclude": True},
         }
         json_loads=json_load_content
         json_dumps=json_dump_content
