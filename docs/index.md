@@ -1,4 +1,4 @@
-# 																												PIWebAsync
+# PIWebAsync
 
 *An asynchronous client API for interfacing with OSIsoft PI Web API*
 
@@ -6,7 +6,7 @@ piwebasync is an HTTP/Websocket client for Python 3 that allows for concurrent r
 
 The key features are:
 
-- Fast: Retrieve hundreds of thousands of rows and normalize JSON responses in seconds
+- Fast: Fully asynchronous API and fast JSON normalization 
 - Validation: Provides first class objects for constructing PI Web API requests that are validated with Pydantic
 - Response Handling: Provides flexibility to user for how to handle API response errors from PI Web API
 - Robust: Built on HTTPX and Websockets, two production-ready client libraries
@@ -14,25 +14,27 @@ The key features are:
 
 Install piwebasync using pip:
 
-`pip install piwebasync`
+	pip install piwebasync
 
 And lets get started...
-`import asyncio`
-`from async_negotiate_auth import NegotiateAuth`
-`from piwebasync import Controller, HTTPClient`
+```python
+	import asyncio
+	from async_negotiate_auth import NegotiateAuth
+	from piwebasync import Controller, HTTPClient
 
-`async def main():`
-	`request = Controller(`
-		`scheme="https",`
-		`host="mypihost.com",`
-		`root="piwebapi"`
-	`).points.get_by_path("\\\\MyDataserver\\MyPoint")`
-	`async with HTTPClient(auth=NegotiateAuth(), safe_chars='/?:=&%;\\') as client:`
-		`response = await client.get(request)`
-`print(response.select("Items.Timestamp", "Items.Value"))`
+	async def main():
+		request = Controller(
+			scheme="https",
+			host="mypihost.com",
+			root="piwebapi"
+		).points.get_by_path("\\\\MyDataserver\\MyPoint")
+		async with HTTPClient(auth=NegotiateAuth(), safe_chars='/?:=&%;\\') as client:
+			response = await client.get(request)
+	print(response.select("Items.Timestamp", "Items.Value"))
 
-`if __name__ == "__main__":
-	asyncio.run(main())`
+	if __name__ == "__main__":
+		asyncio.run(main())
+```
 
 ## Documentation
 
