@@ -305,9 +305,8 @@ class WebsocketClient:
         """
         Close the client
         
-        The closing sequence will cancel `run_channel_task` and raise
-        any channel exceptions. This resets the client state so it can
-        be opened again
+        Execute closing sequence. Calls to `recv` after the closing
+        sequence has started will raise ChannelClosed
         """
         try:
             logger.debug("closing channel")

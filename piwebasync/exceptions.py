@@ -1,19 +1,23 @@
-class PIWebAPIException(Exception):
+class PIWebAsyncException(Exception):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)
 
 
-class SerializationError(PIWebAPIException):
+class APIException(PIWebAsyncException):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
+class SerializationError(APIException):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)
 
 
-class HTTPClientError(PIWebAPIException):
+class HTTPClientError(PIWebAsyncException):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)
 
 
-class WebsocketClientError(PIWebAPIException):
+class WebsocketClientError(PIWebAsyncException):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)
 
