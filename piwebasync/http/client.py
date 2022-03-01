@@ -193,7 +193,7 @@ class HTTPClient:
         Returns:
             HTTPResponse
         """
-        self._verify_request(request, "GET")
+        self._validate_method(request, "GET")
         return await self.request(
             request,
             headers=headers,
@@ -226,7 +226,7 @@ class HTTPClient:
         Returns:
             HTTPResponse
         """
-        self._verify_request(request, "POST")
+        self._validate_method(request, "POST")
         return await self.request(
             request,
             headers=headers,
@@ -260,7 +260,7 @@ class HTTPClient:
         Returns:
             HTTPResponse
         """
-        self._verify_request(request, "PUT")
+        self._validate_method(request, "PUT")
         return await self.request(
             request,
             headers=headers,
@@ -294,7 +294,7 @@ class HTTPClient:
         Returns:
             HTTPResponse
         """
-        self._verify_request(request, "PATCH")
+        self._validate_method(request, "PATCH")
         return await self.request(
             request,
             headers=headers,
@@ -327,7 +327,7 @@ class HTTPClient:
         Returns:
             HTTPResponse
         """
-        self._verify_request(request, "DELETE")
+        self._validate_method(request, "DELETE")
         return await self.request(
             request,
             headers=headers,
@@ -372,16 +372,16 @@ class HTTPClient:
             )
         return event_hooks
 
-    def _verify_request(
+    def _validate_method(
         self,
         request: APIRequest,
         expected_method: str
     ) -> None:
         """
-        Validates request type and also validates HTTP method
+        Validate HTTP method of request
 
         Raises:
-            - TypeError: request is not an instance of APIRequest
+            - TypeError: request is not an APIRequest
             - ValueError: invalid HTTP method for request
         """
         
@@ -398,8 +398,11 @@ class HTTPClient:
         Validate request is an HTTP request
         
         Raises
+            - TypeError: request is not an APIRequest
             - ValueError: invalid protocol for request
         """
+        if not isinstance(request, APIRequest):
+            raise TypeError(f"'request' must be instance of APIRequest. Got {type(request)}")
         if request.protocol != "HTTP":
             raise ValueError(
                 f"Invalid protocol for {self.__class__.__name__}. Expected 'HTTP', "

@@ -4,6 +4,7 @@ from .websockets import WebsocketClient
 
 __all__ = [
     "APIRequest",
+    "APIResponse",
     "Controller",
     "HTTPClient",
     "HTTPResponse",
