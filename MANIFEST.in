@@ -1,0 +1,3 @@
+include CHANGELOG.md
+include httpx_extensions/py.typed
+include requirements.txt
