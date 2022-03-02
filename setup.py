@@ -50,7 +50,7 @@ setup(
         "Source": "https://github.com/newvicx/piwebasync",
     },
     license="MIT",
-    description="An asynchronous python API for making requests to an OSIsoft PI Web API server",
+    description="An asynchronous client API for interfacing with OSIsoft PI Web API",
     long_description=get_long_description(),
     long_description_content_type="text/markdown",
     author="Chris Newville",
@@ -61,7 +61,7 @@ setup(
     zip_safe=False,
     install_requires=get_requirements(),
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 4 - Beta",
         "Environment :: Web Environment",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: MIT License",
