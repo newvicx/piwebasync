@@ -194,7 +194,9 @@ class TestAPIResponse:
     
 
     def test_response_normalization(self):
-        """Top level attributes in response body should be normalized to snake case"""
+        """
+        Top level attributes in response body should be normalized to snake case
+        """
 
         content = {
             "WebId": "I1DPa70Wf0zBA06CLkV9ovNQgQCAAAAA",
@@ -219,3 +221,31 @@ class TestAPIResponse:
             **content
         )
         assert response.display_digits == -5
+
+    def test_dict_conversion(self):
+        """
+        When converting to dict, top level attributes should convert back to camel case
+        """
+        content = {
+            "WebId": "I1DPa70Wf0zBA06CLkV9ovNQgQCAAAAA",
+            "Id": 82,
+            "Name": "PointName",
+            "Path": "\\\\MyPIServer\\PointName",
+            "Descriptor": "12 Hour Sine Wave",
+            "PointClass": "classic",
+            "PointType": "Float32",
+            "DigitalSetName": "",
+            "Span": 100.0,
+            "Zero": 0.0,
+            "EngineeringUnits": "",
+            "Step": False,
+            "Future": False,
+            "DisplayDigits": -5,
+            "Links": {
+                "Self": "https://localhost.osisoft.int/piwebapi/points/I1DPa70Wf0zBA06CLkV9ovNQgQCAAAAA"
+            }
+        }
+        response = APIResponse(
+            **content
+        )
+        assert response.dict()["DisplayDigits"] == -5
