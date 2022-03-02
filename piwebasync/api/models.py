@@ -38,15 +38,27 @@ from .util import(
 class Controller:
     """
     Base class for all PI Web API controllers. Provides a standardized
-    API for constructing PI Web API endpoints.
+    API for constructing APIRequests. All supported PI Web API controllers
+    can be accessed as attributes of the base Controller instance
 
-    Usage:
-    Method chaining...
-    >>> request = Controller(scheme, host, port, root).streams.get_end(webid)
-    Reuse base url...
-    >>> controller = Controller(scheme, host, port, root)
-    >>> request_1 = controller.streams.get_end(webid)
-    >>> request_2 = controller.points.get_by_path(path)
+    **Usage**
+
+    ```python
+    # Chaining
+    request: APIRequest = Controller(scheme, host, port, root).streams.get_end(webid)
+
+    # Reuse base URL
+    controller: Controller = Controller(scheme, host, port, root)
+    request_1: APIRequest = controller.streams.get_end(webid)
+    request_2: APIRequest = controller.streams.get_recorded(webid)
+    ```
+
+    **Parameters**
+
+    - **scheme** (*str*): URL scheme; *"http"*, *"https"*, *"ws"*, *"wss"*
+    - **host** (*str*): PI Web API host address
+    - **port** (*Optional(str)*): the port to connect to
+    - **root** (*Optional(str)*): root path to PI Web API
     """
     
     SEMI_COLON_PARAMS = [
@@ -159,8 +171,26 @@ class Controller:
 
 class APIRequest(BaseModel):
     """
-    Base model for Pi Web API requests. An API request is passed to
-    client instance to handle the request
+    Base model for Pi Web API requests. An API request is passed to a
+    client instance to handle the request. You will not typically create
+    APIRequest objects yourself. Generally, you should use the *Controller*
+    object instead. However, for non supported controllers and controller
+    methods you may want to create your own APIRequest directly
+
+    **Parameters**
+
+    - **root** (*str*): root path to PI Web API
+    - **method** (*str*): the HTTP method for the request
+    - **protocol** (*str*): request protocol to use; either *"HTTP"* or *"Websockets"*
+    - **controller** (*str*): the controller being accessed on the PI Web API
+    - **scheme** (*str*): URL scheme; *"http"*, *"https"*, *"ws"*, *"wss"*
+    - **host** (*str*): PI Web API host address
+    - **port** (*Optional(str)*): the port to connect to
+    - **action** (*Optional(str)*): the PI Web API controller method, this is a path parameter
+    - **webid** (*Optional(str)*): the WebId of a resource, this is a path parameter
+    - **add_path** (*Optional(list[str])*): additional path parameters to be included.
+    > List elements are added to the end of the path in order separated by a "/"
+    - **kwargs** (*Optional(Any)*): query parameters for controller method
     """
     root: str
     method: str
@@ -267,7 +297,17 @@ class APIRequest(BaseModel):
 
 
 class APIResponse(BaseModel):
-    """Base model for Pi Web API responses"""
+    """
+    Base model for PI Web API responses. Users will never create APIResponse
+    objects directly. Instead, *HTTPResponse* and *WebsocketMessage*
+    instances will be returned from the *HTTPClient* and *WebsocketClient*
+    respectively. The APIResponse model handles errors in the body of a
+    response and normalizes all arguments from camel case to snake case
+
+    **Parameters**
+
+    - **kwargs** (*Optional(Any)*): Any content to be included in response
+    """
 
     class Config:
         extra="allow"
@@ -301,23 +341,32 @@ class APIResponse(BaseModel):
     
     @root_validator
     def normalize_response(cls, values: Dict[str, JSONType]) -> Dict[str, JSONType]:
-        """Normalize top level keys from response body to snake case"""
+        """
+        Normalize top level keys from response body to snake case
+        """
         return {normalize_response_key(key): val for key, val in values.items()}
 
     @property
     def raw_response(self) -> bytes:
-        """Reproduce raw response content as bytes. Raw response is valid JSON to deserialize"""
+        """
+        Reproduce raw response body from PI Web API as bytes
+        """
         response = self.dict()
-        response = {normalize_camel_case(key): val for key, val in response.items()}
         return orjson.dumps(response)
+
+    def dict(self, *args, **kwargs) -> Dict[Any]:
+        """
+        Restore camel case for top level response content
+        """
+        response = super().dict()
+        return {normalize_camel_case(key): val for key, val in response.items()}
     
     def select(self, *fields: str) -> Dict[str, JSONType]:
         """
-        Returns with the values of the selected fields from the response content.
-        Define 'fields' using dot notation (Top.Nested.NestedNested)
+        Returns the values of the selected fields from the response content.
+        'fields' are defined using dot notation (Top.Nested.NestedNested)
         """
         response = self.dict()
-        response = {normalize_camel_case(key): val for key, val in response.items()}
         return {field: search_response_content(field, response) for field in fields}
 
 

@@ -41,25 +41,51 @@ from .hooks import use_safe_url_hook
 class HTTPClient:
 
     """
-    Asynchronous HTTP client for making requests to a Pi Web API server.
-    Supports Kerberos and NTLM authentication
+    Asynchronous HTTP client for making requests to a Pi Web API server
 
-    Usage:
-    >>> request = Controller(scheme, host, root=root).streams.get_end(webid)
-    >>> async with piwebasync.HTTPClient() as client:
-    >>>     response = await client.get(request)
+    **Usage**
 
-    Args:
-        - safe_chars (str): an optional string containing characters which
-        should not be percent encoded when sending the request. Note that httpx's event
-        hook system is used to wrap the default URL class before the request is sent
-        and after the response is received. It will always be the first hook executed
-        in both cases.
+    ```python
+    request = Controller(scheme, host, root=root).streams.get_end(webid)
+    async with piwebasync.HTTPClient() as client:
+        response = await client.get(request)
+    ```
 
-    The rest of arguments come the from the httpx_extensions.ExClient object...
-    https://github.com/newvicx/httpx_extensions/blob/main/httpx_extensions/client.py
+    **Parameters**
 
-    The ExClient API mimics the HTTPX API and supports many of its features...
+    - **auth** (*Optional*): An authentication class to use when sending
+    requests.
+    - **headers** (*Optional*): Dictionary of HTTP headers to include
+    when sending requests.
+    - **cookies** (*Optional*): Dictionary of Cookie items to include
+    when sending requests.
+    - **verify** (*Optional*): SSL certificates (a.k.a CA bundle) used
+    to verify the identity of requested hosts. Either True (default CA bundle),
+    a path to an SSL certificate file, an ssl.SSLContext, or False (which will disable
+    verification).
+    - **safe_chars** (*Optional*): String of safe characters that should
+    not be percent encoded
+    - **cert** (*Optional*): An SSL certificate used by the requested host
+    to authenticate the client. Either a path to an SSL certificate file, or
+    two-tuple of (certificate file, key file), or a three-tuple of (certificate
+    file, key file, password).
+    - **proxies** (*Optional*): A dictionary mapping proxy keys to proxy URLs.
+    - **mounts** (*Optional*): A dictionary of mounted transports against a given
+    schema or domain
+    - **timeout** (*Optional*): The timeout configuration to use when sending requests.
+    - **follow_redirects** (*Optional*): Boolean flag indicating if client should
+    follow redirects
+    - **limits** (*Optional*): The limits configuration to use.
+    - **max_redirects** (*Optional*): The maximum number of redirect responses
+    that should be followed.
+    - **event_hooks** (*Optional*): Dictionary of async callables with signature
+    *Callable[[Union[httpx.Request, httpx.Response]], Union[httpx.Request, httpx.Response]]*
+    - **transport** (*Optional*): A transport class to use for sending requests over
+    the network.
+    - **trust_env** (*Optional*) Enables or disables usage of environment variables
+    for configuration.
+
+    The underlying client (ExClient) API mimics the HTTPX API and supports many of its features...
     https://www.python-httpx.org/async/
 
     For key differences between the httpx_extensions.ExClient and httpx.AsyncClient
@@ -123,16 +149,32 @@ class HTTPClient:
         timeout: Union[TimeoutTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
         extensions: dict = None,
     ) -> HTTPResponse:
-
         """
-        Send request to Pi Web API server, returns an HTTPResponse instance
+        Verify and send APIRequest
 
-        Raises:
-            - ValueError: invalid protocol for request
-            - HTTPClientError: Error occurred in the underlying client object
+        **Parameters**
 
-        Returns:
-            HTTPResponse
+        - **request** (*APIRequest*): request to send
+        - **headers** (*Optional*): Dictionary of HTTP headers to include for this request
+        - **json** (*Optional*): Dictionary of JSON encoded data to send in request body
+        - **auth** (*Optional*): An authentication class to use for this request
+        - **follow_redirects** (*Optional*): Boolean flag indicating client should follow
+        redirects for this request
+        - **timeout** (*Optional*): The timeout configuration to use for this request
+        - **extensions** (*Optional*): Dictionary of request extensions to use for this
+        request
+
+        **Returns**
+
+        - **HTTPResponse**: response object containing response info and content
+
+        **Raises**
+
+        - **ValueError**: invalid APIRequest protocol for client or invalid HTTP method for
+        controller
+        - **TypeError**: request is not an instance of APIRequest
+        - **HTTPClientError**: error sending request. Always originates from an error in
+        the underlying client object. Will always have a `__cause__` attribute
         """
 
         self._validate_protocol(request)
@@ -181,18 +223,22 @@ class HTTPClient:
         timeout: Union[TimeoutTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
         extensions: dict = None,
     ) -> HTTPResponse:
-
         """
-        Send GET request to Pi Web API server, returns an HTTPResponse instance
+        Verify and send a GET APIRequest
 
-        Raises:
-            - TypeError: request is not an instance of APIRequest
-            - ValueError: client does not support this request
-            - HTTPClientError: Error occurred in the underlying client object
+        **Parameters**
 
-        Returns:
-            HTTPResponse
+        - See ***HTTPClient.request*** (Does not accept *json* parameter)
+
+        **Returns**
+
+        - See ***HTTPClient.request***
+
+        **Raises**
+
+        - See ***HTTPClient.request***
         """
+
         self._validate_method(request, "GET")
         return await self.request(
             request,
@@ -214,18 +260,22 @@ class HTTPClient:
         timeout: Union[TimeoutTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
         extensions: dict = None
     ) -> HTTPResponse:
-        
         """
-        Send POST request to Pi Web API server, returns an HTTPResponse instance
+        Verify and send a POST APIRequest
 
-        Raises:
-            - TypeError: request is not an instance of APIRequest
-            - ValueError: client does not support this request
-            - HTTPClientError: Error occurred in the underlying client object
+        **Parameters**
 
-        Returns:
-            HTTPResponse
+        - See ***HTTPClient.request***
+
+        **Returns**
+
+        - See ***HTTPClient.request***
+
+        **Raises**
+
+        - See ***HTTPClient.request***
         """
+
         self._validate_method(request, "POST")
         return await self.request(
             request,
@@ -248,18 +298,22 @@ class HTTPClient:
         timeout: Union[TimeoutTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
         extensions: dict = None
     ) -> HTTPResponse:
-        
         """
-        Send PUT request to Pi Web API server, returns an HTTPResponse instance
+        Verify and send a PUT APIRequest
 
-        Raises:
-            - TypeError: request is not an instance of APIRequest
-            - ValueError: client does not support this request
-            - HTTPClientError: Error occurred in the underlying client object
+        **Parameters**
 
-        Returns:
-            HTTPResponse
+        - See ***HTTPClient.request***
+
+        **Returns**
+
+        - See ***HTTPClient.request***
+
+        **Raises**
+
+        - See ***HTTPClient.request***
         """
+
         self._validate_method(request, "PUT")
         return await self.request(
             request,
@@ -282,18 +336,22 @@ class HTTPClient:
         timeout: Union[TimeoutTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
         extensions: dict = None
     ) -> HTTPResponse:
-
         """
-        Send PATCH request to Pi Web API server, returns an HTTPResponse instance
+        Verify and send a PATCH APIRequest
 
-        Raises:
-            - TypeError: request is not an instance of APIRequest
-            - ValueError: client does not support this request
-            - HTTPClientError: Error occurred in the underlying client object
+        **Parameters**
 
-        Returns:
-            HTTPResponse
+        - See ***HTTPClient.request***
+
+        **Returns**
+
+        - See ***HTTPClient.request***
+
+        **Raises**
+
+        - See ***HTTPClient.request***
         """
+
         self._validate_method(request, "PATCH")
         return await self.request(
             request,
@@ -315,18 +373,22 @@ class HTTPClient:
         timeout: Union[TimeoutTypes, UseClientDefault] = USE_CLIENT_DEFAULT,
         extensions: dict = None
     ) -> HTTPResponse:
-
         """
-        Send DELETE request to Pi Web API server, returns an HTTPResponse instance
+        Verify and send a DELETE APIRequest
 
-        Raises:
-            - TypeError: request is not an instance of APIRequest
-            - ValueError: client does not support this request
-            - HTTPClientError: Error occurred in the underlying client object
+        **Parameters**
 
-        Returns:
-            HTTPResponse
+        - See ***HTTPClient.request***
+
+        **Returns**
+
+        - See ***HTTPClient.request***
+
+        **Raises**
+
+        - See ***HTTPClient.request***
         """
+
         self._validate_method(request, "DELETE")
         return await self.request(
             request,

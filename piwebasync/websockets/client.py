@@ -36,28 +36,65 @@ logger = logging.getLogger(__name__)
 class WebsocketClient:
 
     """
-    Asynchronous Websocket client to PI Web API channel endpoint.
-    Supports Kerberos and NTLM authentication
+    Asynchronous Websocket client to PI Web API channel endpoint
 
-    Usage:
-    >>> request = Controller(scheme, host, root=root).streams.get_channel(webid)
-    >>> async with WebsocketClient(request) as channel:
-    >>>     async for response in channel:
-    >>>         process_response(response)
+    **Usage**
 
-    Args:
-        - request (APIRequest): PI Web API endpoint to connect to
-        - reconnect (bool): if true, the channel will try and reconnect on 
-        a ConnectionClosedError
-        - open_timeout(float): timeout for channel to be opened
-        - dead_channel_timeout (float): timeout for channel to be considered "dead". If
-        reconnect=True, a watchdog task will monitor the channel and close the channel
-        if the channel is unable to reconnect in the allotted time. Set to None for no timeout
-        - auth (Auth): httpx style auth flow for handling websocket handshake. Defaults to
-        a "No Auth" scheme. See ws_auth README for more info
+    ```python
+    # As async context manager
+    async with WebsocketClient(request) as channel:
+        message = await channel.recv()
 
-    The rest of the arguments come directly from the websockets.Connect object...
-    https://github.com/aaugustin/websockets/blob/main/src/websockets/legacy/client.py
+    # No context manager
+    channel = await WebsocketClient(request)
+    try:
+        message = await channel.recv()
+    finally:
+        await channel.close()
+        
+    # Async iterator
+    async with WebsocketClient(request) as channel:
+        async for message in channel:
+            print("Got a message!")
+    ```
+
+    **Parameters**
+
+    - **request** (*APIRequest*): PI Web API channel endpoint to connect to
+    - **create_protocol** (*Optional*) - factory for the asyncio.Protocol managing
+    the connection; defaults to WebsocketAuthProtocol; may be set to a wrapper or a
+    subclass to customize connection handling.
+    - **auth** (*Optional*): An authentication class to use during opening handshake
+    - **compression** (*Optional*) - shortcut that enables the “permessage-deflate”
+    extension by default; may be set to None to disable compression; see the compression
+    guide from the websockets library for details.
+    - **origin** (*Optional*) - value of the Origin header. This is useful when
+    connecting to a server that validates the Origin header to defend against
+    Cross-Site WebSocket Hijacking attacks.
+    - **extensions** (*Optional*) - list of supported extensions, in order in which
+    they should be tried.
+    - **subprotocols** (*Optional*) - list of supported subprotocols, in order of
+    decreasing preference.
+    - **extra_headers** (*Optional*) - arbitrary HTTP headers to add to the request.
+    - **open_timeout** (*Optional*) - timeout for opening the connection in seconds;
+    None to disable the timeout
+    - **reconnect** (*Optional*): if `True`, client will attempt to reconnect on network
+    or protocol failure
+    - **dead_channel_timeout** (*Optional*): if `reconnect=True`, client will try to
+    reestablish connection for at most dead_channel_timeout seconds. Set to None to
+    disable timeout
+    - **ping_interval** (*Optional*) - delay between keepalive pings in seconds; None
+    to disable keepalive pings.
+    - **ping_timeout** (*Optional*) - timeout for keepalive pings in seconds; None to
+    disable timeouts.
+    - **close_timeout** (*Optional*) - timeout for closing the connection in seconds;
+    for legacy reasons, the actual timeout is 4 or 5 times larger.
+    - **max_size** (*Optional*) - maximum size of incoming messages in bytes; None to
+    disable the limit.
+    - **max_queue** (*Optional*) - maximum number of incoming messages in receive buffer;
+    None to disable the limit.
+    - **read_limit** (*Optional*) - high-water mark of read buffer in bytes.
+    - **write_limit** (*Optional*) - high-water mark of write buffer in bytes.
 
     For more information on Channels in the PI Web API see...
     https://docs.osisoft.com/bundle/pi-web-api-reference/page/help/topics/channels.html
@@ -194,12 +231,14 @@ class WebsocketClient:
         Canceling `recv` is safe. There's no risk of losing the next
         message. The next invocation of `recv` will return it.
 
-        Returns
-            - WebsocketMessage
+        **Returns**
 
-        Raises
-            - ChannelClosed: when the connection is closed.
-            - RuntimeError: if two coroutines call `recv` concurrently.
+        - **WebsocketMessage**
+
+        **Raises**
+
+        - **ChannelClosed**: when the connection is closed
+        - **RuntimeError**: if two coroutines call `recv` concurrently
         """
 
         if self._waiting_recv:
@@ -253,22 +292,22 @@ class WebsocketClient:
         """
         Update Channel endpoint
         
-        This method does not interrupt :meth:`recv`.
-        Any messages already in the client buffer will remain
-        there. New messages will reflect the updated endpoint
-        accordingly. If :meth:`update` fails with a ChannelUpdateError,
-        the channel will close
+        This method does not interrupt `recv`. Any messages already
+        in the client buffer will remain there. New messages will
+        reflect the updated endpoint accordingly. If `update` fails
+        with a *ChannelUpdateError*, the channel will remain in a
+        CLOSED state
 
-        Args:
-            - request (APIRequest): The new endpoint to
-            connect to
-        Raises:
-            - ChannelUpdateError: Unable to establish connection
-            to new endpoint
-            - ChannelClosed: The channel is closed
-            - ValueError: Request is invalid
-            - RuntimeError: if two coroutines call :meth:`update`
-            concurrently
+        **Parameters**
+
+        - **request** (*APIRequest*): The new endpoint to connect to
+
+        **Raises**
+
+        - **ChannelUpdateError**: Unable to establish connection to new endpoint
+        - **ChannelClosed**: The channel is closed
+        - **ValueError**: Request is invalid
+        - **RuntimeError**: if two coroutines call `update` concurrently
         """
         
         if self._waiting_update:

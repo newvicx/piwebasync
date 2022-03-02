@@ -28,11 +28,15 @@ def json_dump_content(
     *,
     default: Optional[Callable[[Any], Any]]
 ) -> str:
-    """Helper to decode orjson.dumps which produces bytes"""
+    """
+    Helper to decode orjson.dumps which produces bytes
+    """
     return orjson.dumps(content, default=default).decode()
 
 def json_load_content(content: bytes) -> JSONType:
-    """Escapes paths returned by Pi Web API so they can loaded as JSON"""
+    """
+    Escapes paths returned by Pi Web API so they can loaded as JSON
+    """
     content.replace('\\', '\\\\')
     try:
         return orjson.loads(bytes(content, 'utf-8'))
@@ -40,7 +44,9 @@ def json_load_content(content: bytes) -> JSONType:
         return {}
 
 def normalize_camel_case(key: str) -> None:
-    """Convert snake case ``param_a`` to camel case ``ParamA``""" 
+    """
+    Convert snake case `param_a` to camel case `ParamA`
+    """ 
     split = key.split('_')
     if len(split) > 1:
         key = ''.join(
@@ -51,7 +57,9 @@ def normalize_camel_case(key: str) -> None:
         return key.title()
 
 def normalize_request_key(key: str) -> str:
-    """Convert snake case ``param_a to lower camel case ``paramA``"""
+    """
+    Convert snake case `param_a` to lower camel case `paramA`
+    """
     split = key.split('_')
     if len(split) > 1:
         key = split[0] + ''.join(
@@ -60,20 +68,26 @@ def normalize_request_key(key: str) -> str:
     return key
 
 def normalize_response_key(key: str) -> str:
-    """Convert camel case ``ParamA to snake case ``param_a``"""
+    """
+    Convert camel case `ParamA` to snake case `param_a`
+    """
     split = re.findall(r'[A-Z](?:[a-z]+|[A-Z]*(?=[A-Z]|$))', key)
     if split:
         return '_'.join([val.lower() for val in split])
     return key.lower()
 
 def normalize_request_params(raw_params: Dict[str, StrType]) -> Dict[str, str]:
-    """Convert snake case keys to lower camel case and serialize params"""
+    """
+    Convert snake case keys to lower camel case and serialize params
+    """
     return {
         normalize_request_key(key): serialize_to_str(param) for key, param in raw_params.items()
     }
 
 def reuse_validator(key: str, validate_func: Callable[[Any], Any]) -> Any:
-    """Helper function for pydantic reuse validator"""
+    """
+    Helper function for pydantic reuse validator
+    """
     if isinstance(validate_func, partial):
         validate_func.__name__ = validate_func.func.__name__
     return validator(key, allow_reuse=True, check_fields=False)(validate_func)
@@ -155,7 +169,9 @@ def search_response_content(field: str, response: JSONType) -> List[JSONType]:
         return []
 
 def serialize_arbitrary_to_str(obj: ConvertsToStr) -> str:
-    """Serialize arbitrary objects with a __str__ method. datetime converts to isoformat"""
+    """
+    Serialize arbitrary objects with a __str__ method. datetime converts to isoformat
+    """
     if isinstance(obj, datetime):
         return obj.isoformat("T")
     elif hasattr(obj, "__str__"):
@@ -166,7 +182,9 @@ def serialize_arbitrary_to_str(obj: ConvertsToStr) -> str:
         )
 
 def serialize_to_str(obj: StrType) -> str:
-    """Serialize objects to be used as query params to str"""
+    """
+    Serialize objects to be used as query params to str
+    """
     if not obj:
         return
     elif isinstance(obj, str):
