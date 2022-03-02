@@ -66,3 +66,6 @@ If you're interested in contributing check out the [issues](https://github.com/n
 
 - Python >= 3.8
 
+## Contributing
+If you are interested in contributing to the project, check out the [todo](https://github.com/newvicx/piwebasync/labels/todo) section of the issues page
+
