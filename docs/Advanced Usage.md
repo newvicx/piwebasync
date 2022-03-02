@@ -2,7 +2,7 @@
 
 ## Websockets
 
-The `WebsocketClient` was built with data streaming services in mind. Lets explore some of the more advanced features by building a pseudo code outline for a simple streaming service.
+The `WebsocketClient` was built with data streaming services in mind. Lets explore some of the more advanced features by building a pseudo code concept for a simple streaming service.
 
 ### Application Overview
 
@@ -25,7 +25,7 @@ from async_negotiate_sspi import NegotiateAuthWS
 from piwebasync import Controller, WebsocketClient
 from broker_service import broker_connection
 
-async def publish_task(queue: asyncio.Queue):
+async def publisher_task(queue: asyncio.Queue):
     publisher = broker_connection(connect_url, role="publisher")
     try:
         while True:
@@ -47,18 +47,9 @@ async def main():
     queue = asyncio.Queue()
 	async with WebsocketClient(request, auth=NegotiateAuthWS()) as channel:
         receive_task = loop.create_task(receive_new_data_task(channel, queue))
-        publish_task = loop.create_task(publish_task(queue))
-        try:
-            await asyncio.wait(
-                [receive_task, publish_task],
-                return_when=asyncio.FIRST_COMPLETED
-            )
-       	except asyncio.CancelledError:
-            if not publish_task.done():
-                publish_task.cancel()
-            if not receive_task.done():
-                receive_task.cancel()
-        await asyncio.gather(receive_task, publish_task)
+        publish_task = loop.create_task(publisher_task(queue))
+        tasks = [receive_task, publish_task]
+        await asyncio.gather(*tasks)
 
 if __name__ == "__main__":
 	asyncio.run(main())
@@ -67,9 +58,10 @@ if __name__ == "__main__":
 So this covers our first two requirements...
 
 > - Opens a websocket connection to a channel endpoint
+> 
 > - Continuously receives data from the channel, extracts the required information and passes the message to a message broker
 
-There are some problems though. What happens if we experience a network interruption or protocol error? Well first, `receive_task` will continue to get messages from the channel so long as messages are buffered. But, once the buffer is exhausted, it will raise a `ChannelClosedError` as a result network error and the service will crash. Our requirements say the service should...
+There are some problems though. What happens if we experience a network interruption or protocol error? Well first, `receive_task` will continue to get messages from the channel so long as messages are buffered. But, once the buffer is exhausted, it will raise a `ChannelClosedError` as a result of thenetwork error and the service will crash. Our requirements say the service should...
 
 > - Be robust (i.e. resistant to network hiccups)
 
@@ -108,7 +100,7 @@ async def receive_new_data_task(channel: WebsocketClient, queue: asyncio.Queue):
             await queue.put(publish_message)
     except ChannelClosedError as err:
         if isinstance(err.__cause__, WatchdogTimeout):
-            raise WatchdogTimeout
+            raise err.__cause__
         raise
 ```
 
@@ -122,20 +114,17 @@ async def main():
 	async with WebsocketClient(request, auth=NegotiateAuthWS()) as channel:
         receive_task = loop.create_task(receive_new_data_task(channel, queue))
         publish_task = loop.create_task(publish_task(queue))
+        tasks = [receive_task, publish_task]
+        done, pending = await asyncio.wait(
+            tasks,
+            return_when=asyncio.FIRST_EXCEPTION
+        )
+        for task in pending:
+            task.cancel()
         try:
-            await asyncio.wait(
-                [receive_task, publish_task],
-                return_when=asyncio.FIRST_COMPLETED
-            )
-       	except asyncio.CancelledError:
-            if not publish_task.done():
-                publish_task.cancel()
-            if not receive_task.done():
-                receive_task.cancel()
-        try:
-        	await asyncio.gather(receive_task, publish_task)
+            await asyncio.gather(*done)
         except WatchdogTimeout:
-            await notification_service.notify()
+            # Notify admin
             raise
 ```
 
@@ -163,57 +152,128 @@ A better approach would be to modify the existing endpoint and re-open the conne
 
 Lets add a little more pseudo code to show a broker consumer process listening for an update to the channel...
 ```python
-import asyncio
-from piwebasync import APIRequest, Controller, WebsocketClient
-from piwebasync.exceptions import ChannelClosedError, ChannelUpdateError, WatchdogTimeout
-
-async def receive_task(channel: WebsocketClient):
-	async for message in channel:
-		print("Got a message")
-		
-async def update_listener_task(channel: WebsocketClient):
-	listener = await messaging_service.connect("connect_url")
-	async for update_details in listener:
-		# We decided to update the channel by sending a message through the messaging service
-		request = APIRequest(**update_details)
-		await channel.update(request)
-
-async def main():
-	loop = asyncio.get_event_loop()
-	request = Controller(scheme, host, root=root).streams.get_channel(webid)
-	try:
-		async with WebsocketClient(request, reconnect=True) as channel:
-			receive_task = loop.create_task(receive_task(channel))
-			listener_task = loop.create_task(listener_task(channel))
-			await asyncio.wait([receive_task, listener_task], return_when=asyncio.FIRST_COMPLETED)
-			if receive_task.done() and not listener_task.done():
-				try:
-					await receive_task
-				except ChannelClosedError:
-					if isinstance(err.__cause__, WatchdogTimeout):
-						# notify admin
-						listener_task.cancel()
-						raise
-			await asyncio.gather(receive_task, listener_task)
-	except (ChannelClosedError, ChannelUpdateError) as err:
-		raise
-
-if __name__ == "__main__":
-	asyncio.run(main())
+async def listener_task(channel: WebsocketClient):
+    consumer = broker_connection(connect_url, role="consumer")
+    try:
+        while True:
+            new_request = await consumer.get()
+            try:
+            	await channel.update(new_request)
+            except ChannelUpdateError:
+                await consumer.close()
+                raise
+    except asyncio.CancelledError:
+        await consumer.close()
+        raise
 ```
 
-*Note: This contains pseudo code with improper error handling. It is simply a demonstration of the concept*
+Then we will update `main` to add this task and handle `ChannelUpdateError`...
 
-## Authentication
-### HTTP
-For HTTP requests, you can plug in any authentication handler that inherits from [httpx.Auth](https://github.com/encode/httpx/blob/master/httpx/_auth.py). See the [HTTPX documentation](https://www.python-httpx.org/advanced/#customizing-authentication) on customizing authentication.
-### Websockets
-For Websocket connections, similar to HTTP requests, you can plug in any authentication handler that inherits from [ws_auth.Auth](https://github.com/newvicx/ws_auth/blob/main/ws_auth/auth.py) which behaves identically to httpx.Auth where the only difference is the signature of the request and response objects that are sent to and returned from the flow generator respectively. Most HTTPX auth flows can be easily adapted to work with ws_auth
-### Kerberos
-Alot of PI Web API servers are secured behind Kerberos. [async_negotiate_sspi](https://github.com/newvicx/async_negotiate_sspi) has both an HTTP and Websocket auth flow for single-sign-on on Windows systems. [httpx_gssapi](https://github.com/pythongssapi/httpx-gssapi) is another negotiate auth handler that relies on GSSAPI. It will only work for HTTP requests but it can be easily ported to work for websockets.
+```python
+async def main():
+    loop = asyncio.get_event_loop()
+    request = Controller(scheme, host, root=root).streams.get_channel(webid)
+    queue = asyncio.Queue()
+	async with WebsocketClient(request, auth=NegotiateAuthWS()) as channel:
+        receive_task = loop.create_task(receive_new_data_task(channel, queue))
+        publish_task = loop.create_task(publish_task(queue))
+        listen_task = loop.create_task(listener_task(channel))
+        tasks = [receive_task, publish_task, listen_task]
+        done, pending = await asyncio.wait(
+            tasks,
+            return_when=asyncio.FIRST_EXCEPTION
+        )
+        for task in pending:
+            task.cancel()
+        try:
+            await asyncio.gather(*done)
+        except WatchdogTimeout:
+            # Notify admin
+            raise
+        except ChannelUpdateError:
+            # Notify user they broke something
+            raise
+```
 
-## JSON Normalization
-Responses from the PI Web API can be deeply nested and somewhat difficult to normalize. Normalizing JSON is usually required if you want to use the data from the PI Web API in a dataframe library like Pandas; in fact Pandas offers a [JSON normalization method](https://pandas.pydata.org/docs/reference/api/pandas.json_normalize.html) for converting nested JSON into a dataframe. This works well in a lot of cases but it tends to struggle with non uniform levels, for example take the following response...
+And finally we have our concept that meets our requirements...
+
+```python
+import asyncio
+from async_negotiate_sspi import NegotiateAuthWS
+from piwebasync import Controller, WebsocketClient
+from piwebasync.exceptions import ChannelClosedError, 
+from broker_service import broker_connection
+
+async def listener_task(channel: WebsocketClient):
+    consumer = broker_connection(connect_url, role="consumer")
+    try:
+        while True:
+            new_request = await consumer.get()
+            try:
+            	await channel.update(new_request)
+            except ChannelUpdateError:
+                await consumer.close()
+                raise
+    except asyncio.CancelledError:
+        await consumer.close()
+        raise
+        
+async def publisher_task(queue: asyncio.Queue):
+    publisher = broker_connection(connect_url, role="publisher")
+    try:
+        while True:
+            message = await queue.get()
+            queue.task_done()
+            await publisher.publish(message)
+    except asyncio.CancelledError:
+        await publisher.close()
+        raise
+
+async def receive_new_data_task(channel: WebsocketClient, queue: asyncio.Queue):
+    try:
+        async for message in channel:
+            publish_message = message.select("Items.Name", "Items.Items.Timestamp", "Items.Items.Value")
+            await queue.put(publish_message)
+    except ChannelClosedError as err:
+        if isinstance(err.__cause__, WatchdogTimeout):
+            raise err.__cause__
+        raise
+        
+async def main():
+    loop = asyncio.get_event_loop()
+    request = Controller(scheme, host, root=root).streams.get_channel(webid)
+    queue = asyncio.Queue()
+	async with WebsocketClient(request, auth=NegotiateAuthWS()) as channel:
+        receive_task = loop.create_task(receive_new_data_task(channel, queue))
+        publish_task = loop.create_task(publisher_task(queue))
+        listen_task = loop.create_task(listener_task(channel))
+        tasks = [receive_task, publish_task, listen_task]
+        done, pending = await asyncio.wait(
+            tasks,
+            return_when=asyncio.FIRST_EXCEPTION
+        )
+        for task in pending:
+            task.cancel()
+        try:
+            await asyncio.gather(*done)
+        except WatchdogTimeout:
+            # Notify admin
+            raise
+        except ChannelUpdateError:
+            # Notify user they broke something
+            raise
+```
+
+***Note: The above code is just for demonstrating the topics discussed in this section and should NOT be adapted for production use***
+
+## Selecting Response Subset and JSON Normalization
+
+Responses from the PI Web API can be deeply nested and somewhat difficult to normalize. Normalizing JSON is usually required if you want to use the data from the PI Web API in a dataframe library
+
+### Pandas
+
+Pandas is the most popular python dataframe library out there and it offers a [JSON normalization method](https://pandas.pydata.org/docs/reference/api/pandas.json_normalize.html) for converting nested JSON into a dataframe. This works well in a lot of cases. For example, take the following response...
+
 ```json
 {
 "Items": [
@@ -245,55 +305,260 @@ Responses from the PI Web API can be deeply nested and somewhat difficult to nor
 "Links": {}
 }
 ```
+The following code will be used to generate each output...
 
-Converting this response to a dataframe with the `.json_normalize` method will not create a "Name" and "Value" column. It will only have a "Value" column where each row is dict with keys "Name" and "Value".
+```python
+import orjson
+import pandas as pd
+out = pd.json_normalize(response.dict()["Items"])
+```
 
-piwebasync provides a method for normalizing JSON through the `.select()` method on all APIResponse objects. The select method takes an arbitrary number of `*fields` and recursively extracts the all values matching the field into a list. The syntax for a field is identical to the `selectedFields` parameter in most PI Web API methods so you will need to know the schema of the response you expect back. In practice though this isn't a huge burden as the response schemas are well documented and usually you need to something about the response schema to do any meaningful analysis with the data. For identical fields in nested lists (such is the case with streamset responses), the values are grouped by the sub list reside in ultimately returning a list of lists. Consider the example below...
+```
+>>> out
+              Timestamp UnitsAbbreviation  Good  Questionable  Substituted  Annotated Value.Name  Value.Value
+0  2014-07-22T14:00:00Z                 m  True         False        False      False        Off            0
+1  2014-07-22T14:00:00Z                 m  True         False        False      False        Off            0
+```
 
-Take the following response where obj 1 and obj 2 represent 2 unique PI points or AF attributes...
+Worked great! But, it falls short in other cases. Take this response...
+
 ```json
 {
 "Items": [
 	{
-	"Obj": 1,
-	"Items": [
-		{"Value": 1},
-		{"Value": 2},
-	]
+	"Timestamp": "2014-07-22T14:00:00Z",
+	"UnitsAbbreviation": "m",
+	"Good": true,
+	"Questionable": false,
+	"Substituted": false,
+	"Annotated": false,
+	"Value": 0,
 	},
 	{
-	"Obj": 2,
-	"Items": [
-		{"Value": 3},
-		{"Value": 4},
-	]
+	"Timestamp": "2014-07-22T14:00:00Z",
+	"UnitsAbbreviation": "m",
+	"Good": true,
+	"Questionable": false,
+	"Substituted": false,
+	"Annotated": false,
+	"Value": {
+		"Name": "Interface Bad Value",
+		"Value": -1,
 	}
-]
+	}
+],
+"Links": {}
 }
 ```
 
-What we probably want is dataframe that looks like this...
-|  Obj 1  |  Obj 2 |
-|:-------:|:------:|
-| Value 1 | Value 3|
-| Value 2 | Value 4|
+```
+>>> out
+              Timestamp UnitsAbbreviation  Good  Questionable  ...  Annotated  Value           Value.Name Value.Value
+0  2014-07-22T14:00:00Z                 m  True         False  ...      False    0.0                  NaN         NaN
+1  2014-07-22T14:00:00Z                 m  True         False  ...      False    NaN  Interface Bad Value        -1.0
+```
 
-We could normalize the JSON response like so...
+Notice how we have two "Value" columns each with half of what we're looking for. Ideally we want a single column with both values.
+
+Finally, it just completely breaks down in some cases. This is an example of streamset response...
+
+```json
+{
+  "Items": [
+    {
+      "WebId": "I1AbEDqD5loBNH0erqeqJodtALAYIKyyz2F5BGAxQAVXYRDBAGyPedZG1sUmxOOclp3Flwg",
+      "Name": "Water",
+      "Path": "\\\\MyAssetServer\\MyDatabase\\MyElement|Water",
+      "Items": [
+        {
+          "Timestamp": "2014-07-22T14:00:00Z",
+          "UnitsAbbreviation": "m",
+          "Good": true,
+          "Questionable": false,
+          "Substituted": false,
+          "Annotated": false,
+          "Value": 12.3
+        },
+        {
+          "Timestamp": "2014-07-22T14:00:00Z",
+          "UnitsAbbreviation": "m",
+          "Good": true,
+          "Questionable": false,
+          "Substituted": false,
+          "Annotated": false,
+          "Value": 12.3
+        }
+      ],
+      "UnitsAbbreviation": "m",
+      "Links": {
+        "Self": "https://localhost.osisoft.int/piwebapi/attributes/I1AbEDqD5loBNH0erqeqJodtALAYIKyyz2F5BGAxQAVXYRDBAGyPedZG1sUmxOOclp3Flwg"
+      }
+    },
+    {
+      "WebId": "I1AbEDqD5loBNH0erqeqJodtALAYIKyyz2F5BGAxQAVXYRDBAGyPedZG1sUmxOOclp3GSWd",
+      "Name": "Fire",
+      "Path": "\\\\MyAssetServer\\MyDatabase\\MyElement|Fire",
+      "Items": [
+        {
+          "Timestamp": "2014-07-22T14:00:00Z",
+          "UnitsAbbreviation": "m",
+          "Good": true,
+          "Questionable": false,
+          "Substituted": false,
+          "Annotated": false,
+          "Value": 451
+        },
+        {
+          "Timestamp": "2014-07-22T14:00:00Z",
+          "UnitsAbbreviation": "m",
+          "Good": true,
+          "Questionable": false,
+          "Substituted": false,
+          "Annotated": false,
+          "Value": 451
+        }
+      ],
+      "UnitsAbbreviation": "m",
+      "Links": {
+        "Self": "https://localhost.osisoft.int/piwebapi/attributes/I1AbEDqD5loBNH0erqeqJodtALAYIKyyz2F5BGAxQAVXYRDBAGyPedZG1sUmxOOclp3Flwg"
+      }
+    }
+  ],
+  "Links": {}
+}
+```
+
+```
+>>> out["Items"]
+0    [{'Timestamp': '2014-07-22T14:00:00Z', 'UnitsA...
+1    [{'Timestamp': '2014-07-22T14:00:00Z', 'UnitsA...
+
+```
+
+We would need to create two separate dataframes and merge them in order to get a sensible output.
+
+### APIResponse.select()
+
+piwebasync provides a method for normalizing JSON through the `.select()` method on all `APIResponse` objects. The `.select()` method takes an arbitrary number of `*fields` and recursively extracts all values matching the field into a list. The syntax for a field is identical to the `selectedFields` parameter in most PI Web API methods (i.e. dot notation). Identical field keys across different lists in the JSON response will be aggregated into a list of lists. The [API Reference](https://github.com/newvicx/piwebasync/blob/main/docs/API%20Reference.md) has in depth examples using the `.select()` method. In this section, we will just compare its use to Pandas.
+
+Lets work with the streamset response output from above. What we probably want is to produce a dataframe like this...
+| Water | Fire |
+| :---: | :--: |
+| 12.3  | 451  |
+| 12.3  | 451  |
+
+We could select from and normalize the JSON response in one go like so...
 ```python
-selection = response.select("Items.Obj", "Items.Items.Value")
+selection = response.select("Items.Name", "Items.Items.Value")
 ```
 
 This will produce a dictionary object that looks like this...
 ```python
 {
-	"Items.Obj": [1, 2],
-	"Items.Items.Value": [[1, 2], [3, 4]]
+	"Items.Name": ["Water", "Fire"],
+	"Items.Items.Value": [[12.3, 12.3], [451, 451]]
 }
 ```
 
-From the above it is trivial to convert that to a structure which can be directly converted to a dataframe...
+You can convert this output to a dataframe like so...
 ```python
-desired_struct = {obj: values for obj, values in zip(selection["Items.Obj"], selection["Items.Items.Value"])}
+desired_struct = {name: values for name, values in zip(selection["Items.Name"], selection["Items.Items.Value"])}
 df = pd.DataFrame.from_dict(desired_struct)
 ```
 
+And the output...
+
+```
+>>> out
+   Water  Fire
+0   12.3   451
+1   12.3   451
+```
+
+## Error Handling in Responses
+
+### Status Code
+
+The status code is the easiest way to tell if a response was successful or not. You can access the status code directly on any `HTTPResponse` object
+
+```python
+print(response.status_code)
+```
+
+`WebsocketMessage` objects do not have a status code
+
+### Web Exception 
+
+From the PI Web API reference
+
+> Introduced in PI Web API 2017 R2, PI Web API now exposes a 'WebException' property on **all** controller responses.
+>
+> Any PI Web API response containing a 'WebException' property which is non-null indicates that PI Web API encountered an **unhandled** error during the transfer of the response stream. These errors can occur despite PI Web API responding with a successful HTTP status code. Responses will not contain a 'WebException' if no error occurred. When present, the 'WebException' property will be present at the top level of all response objects. A 'WebException' contains a 'StatusCode' field, which indicates the correct error HTTP Status Code the client should interpret the response as returning with.
+
+All `APIResponse` objects handle the WebException property and will alter the status code of a response should it be required
+
+You can check if response has a WebException using the `dict()` method
+
+```python
+has_web_exception = response.dict().get("WebException") is not None
+```
+
+### Errors
+
+The body of a response with a 400- or 500- level status code can have an "Errors" property. You can check for this in a similar manner to the "WebException" property
+
+```python
+has_errors = response.dict().get("Errors") is not None
+```
+
+Errors in the response body can also occur due to a `JSONDecodeError` when either the `HTTPClient` or `WebsocketClient` is handling the raw response content. These errors will be associated with a "ResponseContent" and "ErrorMessage" property in the APIResponse content. Similar to the cases above you can check for this type of error like so...
+
+```python
+has_parsing_error = response.dict().get("ResponseContent") is not None
+# OR
+has_parsing_error = response.dict().get("ErrorMessage") is not None
+```
+
+There is an additional error that can occur in the Stream and StreamSet controllers. From the PI Web API Reference...
+
+> The Stream and Stream Set controller responses may contain an additional field called 'Errors' in the response. The purpose of the 'Errors' field is to indicate that an error occurred for a particular value while streaming the response. For example, if there are 100 values returned and one of them has an associated error, the remaining 99 values do not need to be discarded. Values will not contain an 'Errors' property if no error occurred. Each object in the list of 'Errors' contains which field name caused an error, as well as the exception message.
+>
+> Unlike 'WebException', which is a single property found at the top level of the response object, an 'Errors' property may be present on any stream value. If a stream value contains an 'Errors' property then its value will be 'null'. If any stream values in the response contain an 'Errors' field, that does not mean the entire value collection returned is invalid.
+>
+> Example Response Body:
+>
+> ```json
+> {
+>     "Timestamp": "2014-07-22T14:00:00Z",
+>     "UnitsAbbreviation": null,
+>     "Good": true,
+>     "Questionable": false,
+>     "Substituted": false,
+>     "Value": null,
+>     "Errors": [
+>         {
+>             "FieldName": "UnitsAbbreviation",
+>             "Message": [
+>                 "PI Point not found."
+>             ]
+>         },
+>         {
+>             "FieldName": "Value",
+>             "Message": [
+>                 "PI Point not found."
+>             ]
+>         }
+>     ]
+> }
+> ```
+
+At this time you cannot check for these errors directly. You can use `.select()` to search for the "Errors" property in the response content but, if for example, it only occurs in 2/100 records in the response content you will get an output that looks like this...
+
+```python
+{
+    "Items.Value": [v1, ..., v100],
+    "Items.Errors": [e1, e2]
+}
+```
+
+In other words, you will not be able to associate the error to record where it occurred. However, any value where an error occurred is guaranteed to be `null` so in most cases you can just disregard the value and log the errors so you know they occurred.

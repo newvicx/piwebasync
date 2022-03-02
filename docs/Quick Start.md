@@ -226,3 +226,15 @@ async with piwebasync.WebsocketClient(request) as client:
         raise
 ```
 
+## Authentication 
+
+### Kerberos
+
+There are two existing libraries I encourage you to look at if your PI Web API server is secured through Kerberos...
+
+- [async_negotiate_sspi](https://github.com/newvicx/async_negotiate_sspi): has both an HTTP and Websocket auth flow for single-sign-on on Windows systems through SSPI
+- [httpx_gssapi](https://github.com/pythongssapi/httpx-gssapi): will only work for HTTP requests but it can be easily ported to work for websockets. Relies on GSSAPI
+
+### Bearer
+
+I did not find any HTTPX style auth flows for bearer authentication but I'm sure the community could correct me on that or develop one

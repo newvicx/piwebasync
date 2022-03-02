@@ -18,19 +18,33 @@ async with piwebasync.HTTPClient() as client:
 **Parameters**
 
 > **auth** (*Optional*): An authentication class to use when sending requests.
+> 
 > **headers** (*Optional*): Dictionary of HTTP headers to include when sending requests.
+> 
 > **cookies** (*Optional*): Dictionary of Cookie items to include when sending requests.
+> 
 > **verify** (*Optional*): SSL certificates (a.k.a CA bundle) used to verify the identity of requested hosts. Either True (default CA bundle), a path to an SSL certificate file, an ssl.SSLContext, or False (which will disable verification).
+> 
 > **safe_chars** (*Optional*): String of safe characters that should not be percent encoded
+> 
 > **cert** (*Optional*): An SSL certificate used by the requested host to authenticate the client. Either a path to an SSL certificate file, or two-tuple of (certificate file, key file), or a three-tuple of (certificate file, key file, password).
+> 
 > **proxies** (*Optional*): A dictionary mapping proxy keys to proxy URLs.
+> 
 > **mounts** (*Optional*): A dictionary of mounted transports against a given schema or domain
+> 
 > **timeout** (*Optional*): The timeout configuration to use when sending requests.
+> 
 > **follow_redirects** (*Optional*): Boolean flag indicating if client should follow redirects
+> 
 > **limits** (*Optional*): The limits configuration to use.
+> 
 > **max_redirects** (*Optional*): The maximum number of redirect responses that should be followed.
+> 
 > **event_hooks** (*Optional*): Dictionary of async callables with signature *Callable[[Union[httpx.Request, httpx.Response]], Union[httpx.Request, httpx.Response]]*
+> 
 > **transport** (*Optional*): A transport class to use for sending requests over the network.
+> 
 > **trust_env** (*Optional*) Enables or disables usage of environment variables for configuration.
 
 *coroutine* ***HTTPClient.request***(*request*, *, *headers=None*, *json=None*, *auth=USE_CLIENT_DEFAULT*, *follow_redirects=USE_CLIENT_DEFAULT*, *timeout=USE_CLIENT_DEFAULT*, *extensions=None*)
@@ -40,11 +54,17 @@ Verify and send APIRequest
 **Parameters**
 
 > **request** (*APIRequest*): request to send
+> 
 > **headers** (*Optional*): Dictionary of HTTP headers to include for this request
+> 
 > **json** (*Optional*): Dictionary of JSON encoded data to send in request body
+> 
 > **auth** (*Optional*): An authentication class to use for this request
+> 
 > **follow_redirects** (*Optional*): Boolean flag indicating client should follow redirects for this request
+> 
 > **timeout** (*Optional*): The timeout configuration to use for this request
+> 
 > **extensions** (*Optional*): Dictionary of request extensions to use for this request
 
 **Returns**
@@ -54,7 +74,9 @@ Verify and send APIRequest
 **Raises**
 
 > **ValueError**: invalid APIRequest protocol for client or invalid HTTP method for controller
+> 
 > **TypeError**: request is not an instance of APIRequest
+> 
 > **HTTPClientError**: error sending request. Always originates from an error in the underlying client object. Will always have a `__cause__` attribute
 
 *coroutine* ***HTTPClient.get***(*request*, *, *headers=None*, *auth=USE_CLIENT_DEFAULT*, *follow_redirects=USE_CLIENT_DEFAULT*, *timeout=USE_CLIENT_DEFAULT*, *extensions=None*)
@@ -170,29 +192,49 @@ async with WebsocketClient(request) as channel:
 **Parameters**
 
 > **request** (*APIRequest*): PI Web API channel endpoint to connect to
+> 
 > **create_protocol** (*Optional*) – factory for the asyncio.Protocol managing the connection; defaults to WebsocketAuthProtocol; may be set to a wrapper or a subclass to customize connection handling.
+> 
 > **auth** (*Optional*): An authentication class to use during opening handshake
+> 
 > **compression** (*Optional*) – shortcut that enables the “permessage-deflate” extension by default; may be set to None to disable compression; see the compression guide for details.
+> 
 > **origin** (*Optional*) – value of the Origin header. This is useful when connecting to a server that validates the Origin header to defend against Cross-Site WebSocket Hijacking attacks.
+> 
 > **extensions** (*Optional*) – list of supported extensions, in order in which they should be tried.
+> 
 > **subprotocols** (*Optional*) – list of supported subprotocols, in order of decreasing preference.
+> 
 > **extra_headers** (*Optional*) – arbitrary HTTP headers to add to the request.
+> 
 > **open_timeout** (*Optional*) – timeout for opening the connection in seconds; None to disable the timeout
+> 
 > **reconnect** (*Optional*): if `True`, client will attempt to reconnect on network or protocol failure
+> 
 > **dead_channel_timeout** (*Optional*): if `reconnect=True`, client will try to reestablish connection for at most dead_channel_timeout seconds. Set to None to disable timeout
+> 
 > **ping_interval** (*Optional*) – delay between keepalive pings in seconds; None to disable keepalive pings.
+> 
 > **ping_timeout** (*Optional*) – timeout for keepalive pings in seconds; None to disable timeouts.
+> 
 > **close_timeout** (*Optional*) – timeout for closing the connection in seconds; for legacy reasons, the actual timeout is 4 or 5 times larger.
+> 
 > **max_size** (*Optional*) – maximum size of incoming messages in bytes; None to disable the limit.
+> 
 > **max_queue** (*Optional*) – maximum number of incoming messages in receive buffer; None to disable the limit.
+> 
 > **read_limit** (*Optional*) – high-water mark of read buffer in bytes.
+> 
 > **write_limit** (*Optional*) – high-water mark of write buffer in bytes.
 
 **Attributes**
 
 > *WebsocketClient*.***is_closed***: `True` when channel is closed; `False` otherwise
+> 
 > *WebsocketClient*.***is_closing***: `True` when channel is closing; `False` otherwise
+> 
 > *WebsocketClient*.***is_open***: `True` when channel is open; `False` otherwise
+> 
 > *WebsocketClient*.***is_reconnecting***: `True` when channel is reconnecting; `False` otherwise
 
 *A channel is considered OPEN when there is an active connection and the client can receive data. When RECONNECTING, the client cannot receive new messages. A user can fetch messages from the client in any state so long as there are messages buffered*
@@ -212,6 +254,7 @@ Canceling `recv` is safe. There's no risk of losing the next message. The next i
 **Raises**
 
 > **ChannelClosed**: when the connection is closed
+> 
 > **RuntimeError**: if two coroutines call `recv` concurrently
 
 *coroutine* ***WebsocketClient.update***(*request*)
@@ -227,8 +270,11 @@ This method does not interrupt `recv`. Any messages already in the client buffer
 **Raises**
 
 > **ChannelUpdateError**: Unable to establish connection to new endpoint
+> 
 > **ChannelClosed**: The channel is closed
+> 
 > **ValueError**: Request is invalid
+> 
 > **RuntimeError**: if two coroutines call `update` concurrently
 
 *coroutine* ***WebsocketClient.close***()
@@ -247,23 +293,38 @@ Base model for Pi Web API requests. An API request is passed to a client instanc
 
 **Parameters**
 >  **root** (*str*): root path to PI Web API
+>  
 >  **method** (*str*): the HTTP method for the request
+>  
 >  **protocol** (*str*): request protocol to use; either *"HTTP"* or *"Websockets"*
+>  
 >  **controller** (*str*): the controller being accessed on the PI Web API
+>  
 >  **scheme** (*str*): URL scheme; *"http"*, *"https"*, *"ws"*, *"wss"*
+>  
 >  **host** (*str*): PI Web API host address
+>  
 >  **port** (*Optional(str)*): the port to connect to
+>  
 >  **action** (*Optional(str)*): the PI Web API controller method, this is a path parameter
+>  
 >  **webid** (*Optional(str)*): the WebId of a resource, this is a path parameter
+>  
 >  **add_path** (*Optional(list[str])*): additional path parameters to be included. List elements are added to the end of the path in order separated by a "/"
+>  
 >  **kwargs** (*Optional(Any)*): query parameters for controller method
+>  
 
 **Attributes**
 
 >  *APIRequest*.***absolute_url***: Returns full URL path as str
+>  
 >  *APIRequest*.***params***: Returns normalized query params as dict
+>  
 >  *APIRequest*.***path***: Returns URL path
+>  
 >  *APIRequest*.***query***: Returns normalized query params as str
+>  
 >  *APIRequest*.***raw_path***: Returns URL target as str
 
 ### APIResponse (pydantic.BaseModel)
@@ -326,14 +387,14 @@ selection = response.select("Items.Timestamp", "Items.Good", "Items.Value.Value"
 
 Output...
 
-```python
->>>selection
->>>{
->>>    "Items.Timestamp": ["2014-07-22T14:00:00Z", "2014-07-22T14:00:00Z"],
->>>    "Items.Good": [True, True],
->>>    "Items.Value.Value": [0, 0]
->>>    "Items.Value.Name": ["Off", "Off"]
->>>}
+```
+>>> selection
+{
+    "Items.Timestamp": ["2014-07-22T14:00:00Z", "2014-07-22T14:00:00Z"],
+    "Items.Good": [True, True],
+    "Items.Value.Value": [0, 0]
+    "Items.Value.Name": ["Off", "Off"]
+}
 ```
 
 Identical field keys across different lists in the JSON response will be aggregated into a list of lists for example...
@@ -410,12 +471,12 @@ selection = response.select("Items.Name", "Items.Items.Value")
 
 Output...
 
-```python
->>>selection
->>>{
->>>	   "Items.Name": ["Water", "Fire"],
->>>    "Items.Items.Value": [[12.3, 12.3], [451, 451]]
->>>}
+```
+>>> selection
+{
+    "Items.Name": ["Water", "Fire"],
+    "Items.Items.Value": [[12.3, 12.3], [451, 451]]
+}
 ```
 
 Keys not found will return an empty list. For example, using the response content from above...
@@ -426,13 +487,13 @@ selection = response.select("Items.Name", "Items.Items.Value", "Items.Engineerin
 
 Output...
 
-```python
->>>selection
->>>{
->>>	   "Items.Name": ["Water", "Fire"],
->>>    "Items.Items.Value": [[12.3, 12.3], [451, 451]]
->>>    "Items.EngineeringUnits": []
->>>}
+```
+>>> selection
+{
+    "Items.Name": ["Water", "Fire"],
+    "Items.Items.Value": [[12.3, 12.3], [451, 451]]
+    "Items.EngineeringUnits": []
+}
 ```
 
 Search will always stop and return value at bottom level even if there is another field specified by the user in select. This behavior is nice for a non uniform response structure. For example...
@@ -474,11 +535,11 @@ selection = response.select("Items.Value.Value")
 
 Output...
 
-```python
->>>selection
->>>{
->>>    "Items.Value.Value": [0, -1]
->>>}
+```
+>>> selection
+{
+    "Items.Value.Value": [0, -1]
+}
 ```
 
 **Parameters**
@@ -496,8 +557,11 @@ Output...
 **Parameters**
 
 > **status_code** (*int*): status code returned from server
+> 
 > **url** (*str*): request URL that produced response
+> 
 > **headers** (*httpx.Headers*): response headers from server
+> 
 > **kwargs** (dict[str, Any]): response content
 
 #### WebsocketMessage (APIResponse)
@@ -507,6 +571,7 @@ Output...
 **Parameters**
 
 > **url** (*str*): request URL that produced response
+> 
 > **kwargs** (dict[str, Any]): response content
 
 ### Controller
@@ -530,20 +595,31 @@ request_2: APIRequest = controller.streams.get_recorded(webid)
 **Parameters**
 
 > **scheme** (*str*): URL scheme; *"http"*, *"https"*, *"ws"*, *"wss"*
+> 
 > **host** (*str*): PI Web API host address
+> 
 > **port** (*Optional(str)*): the port to connect to
+> 
 > **root** (*Optional(str)*): root path to PI Web API
 
 **Attributes**
 
 > *Controller*.***assetdatabases***: PI Web API AssetDatabases controller
+> 
 > *Controller*.***assetservers***: PI Web API AssetServers controller
+> 
 > *Controller*.***attributes***: PI Web API Attributes controller
+> 
 > *Controller*.***dataservers***: PI Web API DataServers controller
+> 
 > *Controller*.***elements***: PI Web API Elements controller
+> 
 > *Controller*.***eventframes***: PI Web API EventFrames controller
+> 
 > *Controller*.***points***: PI Web API Points controller
+> 
 > *Controller*.***streams***: PI Web API Streams controller
+> 
 > *Controller*.***streamsets***: PI Web API StreamSets controller
 
 You can view the supported controller methods by examining the [source code](https://github.com/newvicx/piwebasync/tree/main/piwebasync/api/controllers)
