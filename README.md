@@ -45,8 +45,6 @@ For more advanced topics, see the [Advanced Usage](https://github.com/newvicx/pi
 
 An [API Reference](https://github.com/newvicx/piwebasync/blob/main/docs/API%20Reference.md) page is also provided
 
-If you're interested in contributing check out the [issues](https://github.com/newvicx/piwebasync/issues) section for some [todos](https://github.com/newvicx/piwebasync/labels/todo) listed
-
 ## Dependencies
 
 #### Requires
