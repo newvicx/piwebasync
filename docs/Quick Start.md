@@ -110,7 +110,9 @@ Because the `HTTPClient` wraps the the `ExClient` which has an identical API to 
 Requests return an instance of `HTTPResponse` which has 3 default properties...
 
 > **status_code** (*int*): status code returned from server
+> 
 > **url** (*str*): request URL that produced response
+> 
 > **headers** (*httpx.Headers*): response headers from server
 
 Additionally you can access the content of the response body by calling the `.dict()` method. This will return the JSON response body as a dictionary. Alternatively, the top level parameters of the response are also attributes of the response so you can access them via dot notation. For example, consider the example response content...
