@@ -354,11 +354,11 @@ class APIResponse(BaseModel):
         response = self.dict()
         return orjson.dumps(response)
 
-    def dict(self, *args, **kwargs) -> Dict[Any]:
+    def dict(self, *args, **kwargs) -> Dict[str, Any]:
         """
         Restore camel case for top level response content
         """
-        response = super().dict()
+        response = super().dict(*args, **kwargs)
         return {normalize_camel_case(key): val for key, val in response.items()}
     
     def select(self, *fields: str) -> Dict[str, JSONType]:
