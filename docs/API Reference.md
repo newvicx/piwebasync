@@ -257,7 +257,7 @@ Canceling `recv` is safe. There's no risk of losing the next message. The next i
 > 
 > **RuntimeError**: if two coroutines call `recv` concurrently
 
-*coroutine* ***WebsocketClient.update***(*request*)
+*coroutine* ***WebsocketClient.update***(*request*, *rollback=True*)
 
 Update Channel endpoint
 
@@ -266,9 +266,13 @@ This method does not interrupt `recv`. Any messages already in the client buffer
 **Parameters**
 
 > **request** (*APIRequest*): The new endpoint to connect to
+>
+> **rollback** (*bool*): The channel will attempt to rollback to the previous endpoint
 
 **Raises**
 
+> **ChannelRollback**: Unable to establish connection to new endpoint but rollback to previous endpoint was successful
+> 
 > **ChannelUpdateError**: Unable to establish connection to new endpoint
 > 
 > **ChannelClosed**: The channel is closed
@@ -564,6 +568,10 @@ Output...
 > 
 > **kwargs** (dict[str, Any]): response content
 
+*method* **HTTPResponse.raise_for_status**()
+
+Non 200 status codes will raise an `HTTPStatusError`. Additionally, if a successful response could not be processed due to a `JSONDecodeError`, this will also raise an `HTTPStatusError`
+
 #### WebsocketMessage (APIResponse)
 
 *class* ***piwebasync.WebsocketMessage***(*url*, ***kwargs*)
@@ -632,11 +640,13 @@ piwebasync defines the following exception hierarchy:
   - `APIException`
     - `SerializationError`
   - `HTTPClientError`
+    - `HTTPStatusError`
   - `WebsocketClientError`
     - `ChannelClosed`
       - `ChannelClosedError`
       - `ChannelClosedOK`
     - `ChannelUpdateError`
+    - `ChannelRollback`
     - `WatchdogTimeout`
 
 ### PIWebAsyncException (Exception)
@@ -650,6 +660,10 @@ Raised when a controller method argument cannot be serialized to URL safe string
 ### HTTPClientError (PIWebAsyncException)
 
 Raised when an error occurs in the the underlying client object of the HTTPClient. Always has a `__cause__`
+
+### HTTPStatusError (PIWebAsyncException)
+
+Raised when a non 200 status code is received in an HTTP request or a `JSONDecodeError` occurred parsing the response
 
 ### WebsocketClientError (PIWebAsyncException)
 
@@ -670,6 +684,10 @@ Raised when client closed via normal closing sequence. Does not have a `__cause_
 ### ChannelUpdateError (WebsocketClientError)
 
 Raised when the client attempts to open connection via `update` method and the method times out
+
+### ChannelRollback (WebsocketClientError)
+
+Raised when the client rolls back to the previous endpoint after a failed update
 
 ### WatchdogTimeout (WebsocketClientError)
 

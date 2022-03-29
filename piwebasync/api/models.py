@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Optional, Union
 
 import orjson
 from httpx import Headers
+from httpx._status_codes import codes
 from piwebasync.api.controllers.dataservers import DataServers
 from piwebasync.api.controllers.eventframes import EventFrames
 from pydantic import(
@@ -22,6 +23,7 @@ from .controllers import(
     Streams,
     StreamSets,
 )
+from ..exceptions import HTTPStatusError
 from ..types import JSONType
 from .util import(
     json_dump_content,
@@ -386,6 +388,23 @@ class HTTPResponse(APIResponse):
         json_loads=json_load_content
         json_dumps=json_dump_content
 
+    def raise_for_status(self):
+        """
+        Raise HTTPStatusErorr for non successful request or error
+        parsing content
+        """
+        
+        status_code = self.status_code
+        if not codes.is_success(status_code):
+            reason_phrase = codes.get_reason_phrase(status_code)
+            errors = self.dict().get('Errors')
+            message = f"{status_code}: {reason_phrase}. The following errors occurred {errors}"
+            raise HTTPStatusError(message)
+        elif codes.is_success(status_code) and self.dict().get('ErrorMessage') is not None:
+            reason_phrase = "JSON Parsing Error"
+            errors = self.dict().get('ErrorMessage')
+            message = f"{status_code}: {reason_phrase}. The following errors occurred {errors}"
+            raise HTTPStatusError(message)
 
 class WebsocketMessage(APIResponse):
     url: str
