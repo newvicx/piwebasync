@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import json
 import logging
 from collections import deque
@@ -26,6 +27,7 @@ from ..exceptions import(
     ChannelClosedError,
     ChannelClosedOK,
     ChannelUpdateError,
+    ChannelRollback,
     WatchdogTimeout
 )
 
@@ -288,7 +290,7 @@ class WebsocketClient:
         
         return self._buffer.popleft()
 
-    async def update(self, request: APIRequest) -> None:
+    async def update(self, request: APIRequest, rollback: bool = False) -> None:
         """
         Update Channel endpoint
         
@@ -301,9 +303,13 @@ class WebsocketClient:
         **Parameters**
 
         - **request** (*APIRequest*): The new endpoint to connect to
+        - **rollback** (*bool*): The channel will attempt to rollback
+        to the previous endpoint
 
         **Raises**
 
+        - **ChannelRollback**: Unable to establish connection to new endpoint
+        but rollback to previous endpoint was successful
         - **ChannelUpdateError**: Unable to establish connection to new endpoint
         - **ChannelClosed**: The channel is closed
         - **ValueError**: Request is invalid
@@ -320,6 +326,7 @@ class WebsocketClient:
         try:
             await self._ensure_open()
             self._verify_request(request)
+            old_url = copy.deepcopy(self.url)
             self.url = request.absolute_url
             async with self._update_lock:
                 logger.debug("updating channel endpoint")
@@ -329,9 +336,17 @@ class WebsocketClient:
                     await self._start()
                     await asyncio.sleep(0)
                 except asyncio.TimeoutError as err:
-                    exc = ChannelUpdateError(
-                        "Unable to establish new connection"
-                    )
+                    if rollback:
+                        self.url = old_url
+                        try:
+                            await self._start()
+                            await asyncio.sleep(0)
+                            raise ChannelRollback(
+                                "Unable to establish new connection. Channel rollback successful."
+                            )
+                        except asyncio.TimeoutError:
+                            pass
+                    exc = ChannelUpdateError("Unable to establish new connection")
                     exc.__cause__ = err
                     self._set_channel_exc(exc)
                     self._close_channel_task = None
@@ -403,6 +418,7 @@ class WebsocketClient:
             )
         except asyncio.TimeoutError:
             run_channel_task.cancel()
+            await run_channel_task
             raise
         # connection established
         self._run_channel_task = run_channel_task
