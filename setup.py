@@ -42,7 +42,7 @@ def get_requirements():
 
 setup(
     name="piwebasync",
-    python_requires=">=3.8",
+    python_requires=">=3.9",
     version=get_version("piwebasync"),
     url="https://github.com/newvicx/piwebasync",
     project_urls={
@@ -69,7 +69,6 @@ setup(
         "Topic :: Internet :: WWW/HTTP",
         "Framework :: AsyncIO",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3 :: Only",
