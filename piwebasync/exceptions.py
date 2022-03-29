@@ -17,6 +17,11 @@ class HTTPClientError(PIWebAsyncException):
         super().__init__(*args)
 
 
+class HTTPStatusError(HTTPClientError):
+    def __init__(self, message) -> None:
+        super().__init__(message)
+
+
 class WebsocketClientError(PIWebAsyncException):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)
@@ -37,6 +42,11 @@ class ChannelClosedOK(ChannelClosed):
 
 
 class ChannelUpdateError(WebsocketClientError):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
+
+
+class ChannelRollback(WebsocketClientError):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)
 
