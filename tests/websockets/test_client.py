@@ -6,7 +6,7 @@ from async_negotiate_sspi import NegotiateAuth, NegotiateAuthWS
 from dotenv import load_dotenv
 
 from piwebasync import Controller, HTTPClient, WebsocketClient, WebsocketMessage
-from piwebasync.exceptions import ChannelClosedError, ChannelClosedOK, ChannelUpdateError
+from piwebasync.exceptions import ChannelClosedError, ChannelClosedOK, ChannelUpdateError, ChannelRollback
 
 
 """
@@ -166,3 +166,34 @@ async def test_channel_update_failure():
         except ChannelClosedError:
             pass
     assert channel.is_closed
+
+
+@pytest.mark.asyncio
+async def test_channel_rollback():
+    """
+    Test failed failed update with rollback enabled raises ChannelRollback
+    and channel continues to process messages at old endpoint
+    """
+    loop = asyncio.get_event_loop()
+    webid = await get_tag_webid(PI_POINT)
+    request_1 = Controller(
+        scheme=WS_SCHEME,
+        host=PI_HOST,
+        root=ROOT
+    ).streams.get_channel(webid, include_initial_values=True, heartbeat_rate=2)
+    request_2 = Controller(
+        scheme=WS_SCHEME,
+        host="mybadhost.com",
+        root=ROOT
+    ).streams.get_channel(webid, include_initial_values=True, heartbeat_rate=2)
+    async with WebsocketClient(request_1, auth=ws_auth, loop=loop) as channel:
+        receive_task = loop.create_task(receiver(channel))
+        await asyncio.sleep(1)
+        
+        with pytest.raises(ChannelRollback):
+            await channel.update(request_2, rollback=True)
+        
+        await asyncio.sleep(1)
+        assert not receive_task.done()
+        assert not channel.is_closed
+        assert channel.is_open

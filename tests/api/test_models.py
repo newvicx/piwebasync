@@ -1,7 +1,9 @@
 import pytest
+from httpx import Headers
 from pydantic import ValidationError
 
-from piwebasync.api import APIRequest, APIResponse, Controller
+from piwebasync.api import APIRequest, APIResponse, Controller, HTTPResponse
+from piwebasync.exceptions import HTTPStatusError
 
 
 HTTP_SCHEME = "http"
@@ -249,3 +251,67 @@ class TestAPIResponse:
             **content
         )
         assert response.dict()["DisplayDigits"] == -5
+
+
+def test_http_status_error():
+    """
+    Unsuccessful status codes or JSON parsing errors should raise
+    an HTTPStatusError
+    """
+    headers = Headers()
+    content = {
+        "Errors": [
+            "The specified path was not found. If more details are needed, please contact your PI Web API administrator for help in enabling debug mode."
+        ]
+    }
+    response = HTTPResponse(
+        status_code=404,
+        url="https://Test404URL.com",
+        headers=headers,
+        **content
+    )
+    with pytest.raises(HTTPStatusError):
+        response.raise_for_status()
+    
+    content = {
+        "Errors": [
+            "Invalid character at line 0"
+        ],
+        "ResponseContent": "\\",
+        "ErrorMessage": "JSONDecodeError: Invalid character at line 0"
+    }
+    response = HTTPResponse(
+        status_code=200,
+        url="https://TestUnableToParse.com",
+        headers=headers,
+        **content
+    )
+    with pytest.raises(HTTPStatusError):
+        response.raise_for_status()
+
+    content = {
+        "WebId": "I1DPa70Wf0zBA06CLkV9ovNQgQCAAAAA",
+        "Id": 82,
+        "Name": "PointName",
+        "Path": "\\\\MyPIServer\\PointName",
+        "Descriptor": "12 Hour Sine Wave",
+        "PointClass": "classic",
+        "PointType": "Float32",
+        "DigitalSetName": "",
+        "Span": 100.0,
+        "Zero": 0.0,
+        "EngineeringUnits": "",
+        "Step": False,
+        "Future": False,
+        "DisplayDigits": -5,
+        "Links": {
+            "Self": "https://localhost.osisoft.int/piwebapi/points/I1DPa70Wf0zBA06CLkV9ovNQgQCAAAAA"
+        }
+    }
+    response = HTTPResponse(
+        status_code=200,
+        url="https://TestSuccess.com",
+        headers=headers,
+        **content
+    )
+    response.raise_for_status()
