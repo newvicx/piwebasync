@@ -62,7 +62,7 @@ An [API Reference](https://github.com/newvicx/piwebasync/blob/main/docs/API%20Re
 
 #### Supports
 
-- Python >= 3.8
+- Python >= 3.9
 
 ## Contributing
 If you are interested in contributing to the project, check out the [todo](https://github.com/newvicx/piwebasync/labels/todo) section of the issues page
