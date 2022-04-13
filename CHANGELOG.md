@@ -12,3 +12,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Removed
 * Support for python 3.8. piwebasync supports python >= 3.9
+
+## 0.1.2 (April 12, 2022)
+* Fix for httpx_extensions issue [#1](https://github.com/newvicx/httpx_extensions/issues/1)
