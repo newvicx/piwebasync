@@ -110,17 +110,24 @@ class HTTPClient:
         mounts: Mapping[str, AsyncBaseTransport] = None,
         timeout: TimeoutTypes = DEFAULT_TIMEOUT_CONFIG,
         follow_redirects: bool = False,
-        limits: Limits = DEFAULT_LIMITS,
+        max_connections: int = 50,
         max_redirects: int = DEFAULT_MAX_REDIRECTS,
         event_hooks: Mapping[str, List[Callable]] = None,
         transport: AsyncBaseTransport = None,
         trust_env: bool = True,
     ) -> None:
 
+        # fix until issue #1 resolved for httpx_extensions
+        if max_connections < 1:
+            raise ValueError("max_connections cannot be less than 1")
+        limits = Limits(
+            max_connections=max_connections,
+            max_keepalive_connections=max_connections
+        )
         event_hooks = self._configure_hooks(
             safe_chars=safe_chars,
             event_hooks=event_hooks
-        )    
+        )
         self.client = ExClient(
             auth=auth,
             headers=headers,
