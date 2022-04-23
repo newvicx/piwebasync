@@ -17,9 +17,14 @@ class HTTPClientError(PIWebAsyncException):
         super().__init__(*args)
 
 
-class HTTPStatusError(HTTPClientError):
-    def __init__(self, message) -> None:
-        super().__init__(message)
+class HttpStatusError(HTTPClientError):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args)
+
+
+class PiWebException(HTTPClientError):
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args)
 
 
 class WebsocketClientError(PIWebAsyncException):

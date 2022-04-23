@@ -22,8 +22,8 @@ from websockets.extensions import ClientExtensionFactory
 from websockets.typing import Origin, Subprotocol
 from ws_auth import Auth, WebsocketAuthProtocol
 
-from ..api import APIRequest, WebsocketMessage
-from ..exceptions import(
+from piwebasync.api import APIRequest, APIResponse
+from piwebasync.exceptions import(
     ChannelClosedError,
     ChannelClosedOK,
     ChannelUpdateError,
@@ -31,8 +31,6 @@ from ..exceptions import(
     WatchdogTimeout
 )
 
-
-logger = logging.getLogger(__name__)
 
 
 class WebsocketClient:
@@ -52,7 +50,7 @@ class WebsocketClient:
     try:
         message = await channel.recv()
     finally:
-        await channel.close()
+        await channel.aclose()
         
     # Async iterator
     async with WebsocketClient(request) as channel:
@@ -125,9 +123,11 @@ class WebsocketClient:
         max_queue: int = 2**5,
         read_limit: int = 2**16,
         write_limit: int = 2**16,
+        logger: logging.Logger = None,
         loop: asyncio.AbstractEventLoop = None
     ) -> None:
 
+        logger = logger or logging.getLogger(__name__)
         self._verify_request(request)
         self.url = request.absolute_url
         self._reconnect = reconnect
@@ -136,6 +136,7 @@ class WebsocketClient:
         self._ws_connect_params = dict(
             auth=auth,
             create_protocol=create_protocol,
+            logger=logger,
             compression=compression,
             origin=origin,
             extensions=extensions,
@@ -150,6 +151,7 @@ class WebsocketClient:
             read_limit=read_limit,
             write_limit=write_limit,
         )
+        self._logger = logger
         self._loop = loop or asyncio.get_event_loop()
 
         self._buffer = deque()
@@ -208,8 +210,8 @@ class WebsocketClient:
         """
         `True` when channel is reconnecting; `False` otherwise
 
-        The channel is considered reconnecting when the underlying websocket protocol
-        instance is closed but the _run_channel_task is not done
+        The channel is considered reconnecting when the underlying websocket
+        protocol instance is closed but the _run_channel_task is not done
         """
         if self._run_channel_task is not None:
             return (
@@ -218,15 +220,15 @@ class WebsocketClient:
             )
         return False
 
-    async def recv(self) -> WebsocketMessage:
+    async def recv(self) -> APIResponse:
         """
         Receive the next message from the buffer
 
         When the connection is closed, `recv` raises
-        `~piwebasync.exceptions.ChannelClosed`. Specifically, it
-        raises `~piwebasync.exceptions.ChannelClosedOK` after a normal
+        `piwebasync.exceptions.ChannelClosed`. Specifically, it
+        raises `piwebasync.exceptions.ChannelClosedOK` after a normal
         connection closure and
-        `~piwebasync.exceptions.ChannelClosedError` after a protocol
+        `piwebasync.exceptions.ChannelClosedError` after a protocol
         error or a network failure. This is how you detect the end of the
         message stream.
 
@@ -234,11 +236,9 @@ class WebsocketClient:
         message. The next invocation of `recv` will return it.
 
         **Returns**
-
-        - **WebsocketMessage**
+        - **APIResponse**
 
         **Raises**
-
         - **ChannelClosed**: when the connection is closed
         - **RuntimeError**: if two coroutines call `recv` concurrently
         """
@@ -301,13 +301,11 @@ class WebsocketClient:
         CLOSED state
 
         **Parameters**
-
         - **request** (*APIRequest*): The new endpoint to connect to
         - **rollback** (*bool*): The channel will attempt to rollback
         to the previous endpoint
 
         **Raises**
-
         - **ChannelRollback**: Unable to establish connection to new endpoint
         but rollback to previous endpoint was successful
         - **ChannelUpdateError**: Unable to establish connection to new endpoint
@@ -329,7 +327,7 @@ class WebsocketClient:
             old_url = copy.deepcopy(self.url)
             self.url = request.absolute_url
             async with self._update_lock:
-                logger.debug("updating channel endpoint")
+                self._logger.debug("updating channel endpoint")
                 self._close_channel_waiter.set_result(None)
                 await self._close_channel_task
                 try:
@@ -350,59 +348,20 @@ class WebsocketClient:
                     exc.__cause__ = err
                     self._set_channel_exc(exc)
                     self._close_channel_task = None
-                    logger.debug("unable to update channel. Channel is closed")
+                    self._logger.debug("unable to update channel. Channel is closed")
                     raise exc
         finally:
             self._waiting_update = False
-
-    async def close(self) -> None:
-        """
-        Close the client
         
-        Execute closing sequence. Calls to `recv` after the closing
-        sequence has started will raise ChannelClosed
-        """
-        try:
-            logger.debug("closing channel")
-            if not self.is_closed:
-                if not self.is_closing:
-                    logger.debug("signaling close channel task")
-                    self._close_channel_waiter.set_result(None)
-                await self._close_channel_task
-                logger.debug("channel closed")
-        finally:
-            self._close_channel_task = None
-
-    async def _ensure_open(self) -> None:
-        """
-        Check if channel is open
-
-        If `update` is called, the channel will appear to be closed.
-        Calls to `recv` will wait to aquire the lock indicating the
-        update process finished before assessing the state of the channel.
-
-        If an error occurred during channel operation, this method
-        will raise ~piwebasync.exceptions.ChannelClosedError otherwise,
-        if the channel is closed or closing it will raise
-        ~piwebasync.exceptions.ChannelClosedOK
-
-        Raises:
-            - ChannelClosed
-        """
-        
-        async with self._update_lock:
-            if self.is_closed or self.is_closing:
-                self._raise_channel_exc()
-
-    async def _start(self) -> None:
+    async def start(self) -> None:
         """
         Establish channel connection
 
-        Raises:
-            - asyncio.TimeoutError: Operation timed out trying to
-            establish connection
-            - RuntimeError: Attempted to open channel that is not
-            closed or `close` was not called
+        **Raises**
+        - **asyncio.TimeoutError**: Operation timed out trying to
+        establish connection
+        - **RuntimeError**: Attempted to open channel that is not
+        closed or `close` was not called
         """
         if not self.is_closed:
             raise RuntimeError(
@@ -424,10 +383,49 @@ class WebsocketClient:
         self._run_channel_task = run_channel_task
         self._close_channel_task = self._loop.create_task(self._close_channel())
         self._watchdog_task = self._loop.create_task(self._watchdog())
-        logger.debug("channel open, all tasks started")
+        self._logger.debug("channel open, all tasks started")
         # ensures all tasks start before recv is called which led to
         # deadlocks in testing
         await asyncio.sleep(0)
+
+    async def aclose(self) -> None:
+        """
+        Close the client
+        
+        Execute closing sequence. Calls to `recv` after the closing
+        sequence has started will raise ChannelClosed
+        """
+        try:
+            self._logger.debug("closing channel")
+            if not self.is_closed:
+                if not self.is_closing:
+                    self._logger.debug("signaling close channel task")
+                    self._close_channel_waiter.set_result(None)
+                await self._close_channel_task
+                self._logger.debug("channel closed")
+        finally:
+            self._close_channel_task = None
+
+    async def _ensure_open(self) -> None:
+        """
+        Check if channel is open
+
+        If `update` is called, the channel will appear to be closed.
+        Calls to `recv` will wait to aquire the lock indicating the
+        update process finished before assessing the state of the channel.
+
+        If an error occurred during channel operation, this method
+        will raise `piwebasync.exceptions.ChannelClosedError` otherwise,
+        if the channel is closed or closing it will raise
+        `piwebasync.exceptions.ChannelClosedOK`
+
+        Raises:
+            - ChannelClosed
+        """
+        
+        async with self._update_lock:
+            if self.is_closed or self.is_closing:
+                self._raise_channel_exc()
 
     async def _run(self) -> None:
         """
@@ -445,15 +443,15 @@ class WebsocketClient:
         """
         try:
             async for protocol in websockets.connect(self.url, **self._ws_connect_params):
-                logger.debug("channel opened")
+                self._logger.debug("channel opened")
                 self._channel_open_event.set()
                 try:
                     await self._transfer_data(protocol)
                 # websocket connection was lost
                 except ConnectionClosedError as err:
-                    logger.debug("protocol or network error ocurred", exc_info=True)
+                    self._logger.debug("protocol or network error ocurred", exc_info=True)
                     if self._reconnect:
-                        logger.debug("attempting to reconnect")
+                        self._logger.debug("attempting to reconnect")
                         continue
                     self._set_channel_exc(err)
                     break
@@ -462,9 +460,9 @@ class WebsocketClient:
                     raise
                 # an exception was raised processing message
                 except Exception as err:
-                    logger.debug("unhandled exception in _transfer_data", exc_info=True)
+                    self._logger.debug("unhandled exception in _transfer_data", exc_info=True)
                     if self._reconnect:
-                        logger.debug("attempting to reconnect")
+                        self._logger.debug("attempting to reconnect")
                         continue
                     await protocol.close()
                     self._set_channel_exc(err)
@@ -515,25 +513,25 @@ class WebsocketClient:
             self._no_data_transfer_event.clear()
             async for message in protocol:
                 websocket_message = self._process_message(message)
-                logger.debug("message received for endpoint %s", websocket_message.url)
+                self._logger.debug("message received for endpoint %s", websocket_message.url)
                 self._buffer.append(websocket_message)
                 # wake up receiver if waiting for a message
                 if self._pop_message_waiter is not None:
-                    logger.debug("waking receiver")
+                    self._logger.debug("waking receiver")
                     self._pop_message_waiter.set_result(None)
                     self._pop_message_waiter = None
         finally:
             self._no_data_transfer_event.set()
 
-    def _process_message(self, message: Union[bytes, str]) -> WebsocketMessage:
+    def _process_message(self, message: Union[bytes, str]) -> APIResponse:
         """
-        Parse message from websocket to WebsocketMessage object
+        Parse message from websocket to APIResponse object
 
-        Args:
+        Parameters:
             message (Union[str, bytes]): Raw message returned from websocket
 
         Returns:
-            WebsocketMessage: Formatted PI Web API channel message
+            APIResponse: Formatted PI Web API channel message
         """
         
         try:
@@ -545,7 +543,7 @@ class WebsocketClient:
                 "ResponseContent": message,
                 "ErrorMessage": repr(err)
             }    
-        return WebsocketMessage(
+        return APIResponse(
             url=self.url,
             **content
         )
@@ -556,18 +554,18 @@ class WebsocketClient:
 
         If the watchdog times out it will start the channel closing process
         and set the `channel_exc` property. Calls to `recv` will raise a
-        `~piwebasync.exceptions.ChannelClosedError` resulting from
-        `~piwebasync.exceptions.WatchdogTimeout`
+        `piwebasync.exceptions.ChannelClosedError` resulting from
+        `piwebasync.exceptions.WatchdogTimeout`
         """
         if self._reconnect:
-            logger.debug("watchdog active")
+            self._logger.debug("watchdog active")
             drops = 0
             while True:
                 if self.is_closed or self.is_closing:
                     break
                 try:
                     try:
-                        logger.debug("waiting for channel open. Drops: %i", drops)
+                        self._logger.debug("waiting for channel open. Drops: %i", drops)
                         await asyncio.wait_for(
                             self._channel_open_event.wait(),
                             self._dead_channel_timeout
@@ -626,25 +624,22 @@ class WebsocketClient:
                 f"got '{request.protocol}'. If this is a HTTP request, use the HTTPClient"
             )
 
-    async def __aiter__(self) -> AsyncIterator[WebsocketMessage]:
-        
+    async def __aiter__(self) -> AsyncIterator[APIResponse]:
         """
         Iterate on incoming messages
 
-        Yields:
-           WebsocketMessage
+        **Yields**
+        - **APIResponse**
 
-        Raises:
-            Raises
-            - ChannelClosed: when the connection is closed.
-            - RuntimeError: if two coroutines call `recv` concurrently.
+        **Raises**
+        - **ChannelClosed**: when the connection is closed.
+        - **RuntimeError**: if two coroutines call `recv` concurrently.
         """
-        
         while True:
             yield await self.recv()
 
     async def __aenter__(self) -> "WebsocketClient":
-        return await self
+        return self
 
     async def __aexit__(
         self,
@@ -652,20 +647,4 @@ class WebsocketClient:
         exc_value: BaseException,
         traceback: TracebackType,
     ) -> None:
-        await self.close()
-
-    # async with WebsocketClient(...) as channel
-    # OR
-    # try
-    #   channel = await WebsocketClient(...)
-    #   do something
-    # finally:
-    #   await channel.close()
-
-    def __await__(self) -> Generator[Any, None, "WebsocketClient"]:
-        # Create a suitable iterator by calling __await__ on a coroutine.
-        return self.__await_impl__().__await__()
-
-    async def __await_impl__(self) -> "WebsocketClient":
-        await self._start()
-        return self
+        await self.aclose()
