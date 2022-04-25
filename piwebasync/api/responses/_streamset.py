@@ -1,8 +1,8 @@
-from typing import Dict, List, Union
+from typing import Dict, List
 
 import orjson
 
-from ..models._response import BaseContent, Empty
+from ...core.models._content import BaseContent, Empty
 
 
 

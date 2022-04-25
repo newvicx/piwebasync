@@ -1,6 +1,6 @@
 from typing import List, Union
 
-from ..models._response import Empty, PiWebContent
+from ...core.models._content import Empty, PiWebContent
 
 
 

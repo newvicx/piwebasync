@@ -2,7 +2,7 @@ from typing import Dict, List, Union
 
 import orjson
 
-from ..models._response import BaseContent, Empty
+from ...core.models._content import BaseContent, Empty
 
 
 

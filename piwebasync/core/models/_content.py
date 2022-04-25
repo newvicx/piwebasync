@@ -13,7 +13,24 @@ JSON = Union[str, int, float, bool, None, Dict[str, "JSON"], List["JSON"]]
 
 
 class Empty:
+    """
+    A unique indentifier for non existent content. Must be
+    distinctly different from None
 
+    The Empty class has some helful properties
+        - Accessing an attribute will always return
+        another instance of Empty
+        - An instance of Empty always evaluates to False
+        - Empty can be iterated on
+
+    These properties are used on response models to provide
+    deterministic results when using a response model despite
+    variations in selected fields
+    
+    Attempting to access an attribute which does not exist
+    in BaseContent or any of its derivatives will return an
+    instance of Empty
+    """
     def __getattribute__(self, __name: str) -> "Empty":
         return Empty()
     
@@ -40,6 +57,7 @@ class BaseContent(BaseModel):
     """
     class Config:
         extra = "allow"
+        json_loads = orjson.loads
 
     @root_validator(pre=True)
     def _normalize_keys(cls, values: Dict[str, JSON]) -> Dict[str, JSON]:
@@ -66,8 +84,13 @@ class WebException(BaseContent):
 
     class Config:
         extra = "forbid"
+        json_loads = orjson.loads
 
     def raise_err(self):
+        """
+        Check for and raise Web Exception if status code
+        is not success
+        """
         if 200 <= self.status_code <= 299:
             raise PiWebException(
                 "PI Web API encountered an unhandled error "
@@ -76,12 +99,6 @@ class WebException(BaseContent):
                 status_code=self.status_code,
                 errors=self.errors
             )
-
-
-class Links(BaseContent):
-    """
-    Links attribute model for PI Web API response
-    """
 
 
 class PiWebContent(BaseContent):
@@ -106,9 +123,7 @@ class PiWebContent(BaseContent):
         """
         interpolated = values.copy()
         for key, val in values.items():
-            if key == "links":
-                interpolated[key] = Links(**val)
-            elif key == "web_exception":
+            if key == "web_exception":
                 interpolated[key] = WebException(**val)
             elif isinstance(val, dict):
                 interpolated[key] = PiWebContent(**val)

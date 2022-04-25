@@ -14,7 +14,6 @@ class StrImplemented:
     Type validator for a user defined type that implements
     the __str__ method
     """
-
     @classmethod
     def __get_validators__(cls):
         yield cls.validate

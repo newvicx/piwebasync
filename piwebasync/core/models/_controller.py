@@ -4,8 +4,8 @@ from typing import Any, Callable, Dict, List, Sequence
 
 from pydantic import AnyUrl, BaseModel, Field, create_model
 
-from ._query import AbstractQueryParam, QueryParam
-from ._response import BaseContent, PiWebContent
+from ._params import AbstractQueryParam, QueryParam
+from ._content import BaseContent, PiWebContent
 from ._url import PiWebHttpUrl, PiWebWebsocketUrl
 
 
@@ -13,12 +13,6 @@ class BaseController(BaseModel):
     """
     Base controller model for all Pi Web API endpoint
     definitions
-
-    Endpoints should dynamically create a model with
-    its base as this class. The model can then have
-    the query parameters casted and validated then
-    converted to the appropriate URL depending on the
-    controller method used
     """
     base_url: AnyUrl = Field(..., exclude=True)
     controller: str = Field(..., exclude=True)
@@ -68,7 +62,8 @@ class BaseController(BaseModel):
         webid_path: str = None,
         action: str = None,
         add_path: Sequence[str] = None,
-        query_params: Sequence[AbstractQueryParam] = None
+        query_params: Sequence[AbstractQueryParam] = None,
+        response_model: BaseContent = PiWebContent
     ) -> PiWebHttpUrl:
         """
         Generate PiWebHttpUrl from controller model
@@ -80,7 +75,8 @@ class BaseController(BaseModel):
             'webid_path': webid_path,
             'action': action,
             'add_path': add_path,
-            'query_params': query_params
+            'query_params': query_params,
+            'response_model': response_model
         }
         model_config = {param: val for param, val in params.items() if val is not None}
         return PiWebHttpUrl(**model_config)
@@ -91,7 +87,8 @@ class BaseController(BaseModel):
         webid_path: str = None,
         action: str = None,
         add_path: Sequence[str] = None,
-        query_params: Sequence[AbstractQueryParam] = None
+        query_params: Sequence[AbstractQueryParam] = None,
+        response_model: BaseContent = PiWebContent
     ) -> PiWebWebsocketUrl:
         """
         Generate PiWebWebsocketUrl from controller model
@@ -102,7 +99,8 @@ class BaseController(BaseModel):
             'webid_path': webid_path,
             'action': action,
             'add_path': add_path,
-            'query_params': query_params
+            'query_params': query_params,
+            'response_model': response_model
         }
         model_config = {param: val for param, val in params.items() if val is not None}
         return PiWebWebsocketUrl(**model_config)
@@ -190,6 +188,9 @@ def http_request(
     map_param_names: Dict[str, str] = {},
     response_model: BaseContent = PiWebContent
 ):
+    """
+    Decorator for constructing HTTP urls
+    """
     def http_request_decorator(controller_method: Callable[[Any], Any]):
         @wraps(controller_method)
         def http_request_wrapper(self, *args, **kwargs):
@@ -208,6 +209,7 @@ def http_request(
             return inst.http_url(
                 http_method,
                 query_params=query_params,
+                response_model=response_model,
                 **url_args
             )
         return http_request_wrapper
@@ -223,6 +225,9 @@ def websocket_request(
     map_param_names: Dict[str, str] = {},
     response_model: BaseContent = PiWebContent
 ):
+    """
+    Decorator for constructing Websocket urls
+    """
     def weboscket_request_decorator(controller_method: Callable[[Any], Any]):
         @wraps(controller_method)
         def websocket_request_wrapper(self, *args, **kwargs):
@@ -240,6 +245,7 @@ def websocket_request(
             )
             return inst.websocket_url(
                 query_params=query_params,
+                response_model=response_model,
                 **url_args
             )
         return websocket_request_wrapper

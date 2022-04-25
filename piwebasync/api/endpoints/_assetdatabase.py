@@ -1,9 +1,9 @@
 from datetime import datetime
 from typing import Sequence
 
-from ..models._controller import http_request
-from ..models._query import MultiInstQueryParam ,SemiColQueryParam
-from ..models._url import PiWebHttpUrl
+from ...core.models._controller import http_request
+from ...core.models._params import MultiInstQueryParam, SemiColQueryParam
+from ...core.models._url import PiWebHttpUrl
 
 
 

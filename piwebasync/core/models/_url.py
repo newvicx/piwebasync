@@ -9,17 +9,9 @@ from pydantic import (
 )
 from yarl import URL
 
-from ._query import AbstractQueryParam
-from ._response import BaseContent, PiWebContent
+from ._params import AbstractQueryParam
+from ._content import BaseContent, PiWebContent
 
-
-
-class PiWebHttpMethods(str, Enum):
-    delete = "DELETE"
-    get = "GET"
-    patch = "PATCH"
-    post = "POST"
-    put = "PUT"
 
 
 class PiWebUrl(BaseModel):
@@ -51,8 +43,15 @@ class PiWebUrl(BaseModel):
     - **add_path** (*Optional[Sequence[str]]*): Any additional path
     parameters to add to the URL. Added in order as they appear
     in the sequence
-    - **query** (*Optional[Sequence[AbstractQueryParam]]*): Sequence
-    of query parameters for URL
+    - **query** (*Optional[
+        Union[
+            str,
+            Dict[str, Union[str, int, float]],
+            Sequence[AbstractQueryParam]
+        ]
+    ]*): Query parameters to build URL
+    - **response_model** (*Optional[BaseContent]*): The response model
+    to translate the JSON response body to
     """
     base_url: AnyUrl
     controller: str
@@ -103,6 +102,8 @@ class PiWebUrl(BaseModel):
         """
         Derive absolute URL
         """
+        if self.absolute_url is not None:
+            return self.absolute_url
         query = self.query
         path = self.path
         relative_url = URL.build(path=path, query=query)
@@ -141,6 +142,20 @@ class PiWebUrl(BaseModel):
             query[field_name] = value
         return query
 
+    def use_response_model(self, model: BaseContent):
+        """
+        Force client to use the chosen response model
+        """
+        self.response_model = model
+
+
+class PiWebHttpMethods(str, Enum):
+    delete = "DELETE"
+    get = "GET"
+    patch = "PATCH"
+    post = "POST"
+    put = "PUT"
+
 
 class PiWebHttpUrl(PiWebUrl):
     """
@@ -150,7 +165,13 @@ class PiWebHttpUrl(PiWebUrl):
     
     @validator('base_url')
     def _validate_scheme(cls, base_url: AnyUrl) -> AnyUrl:
-        assert base_url.scheme.lower() in ['http', 'https'], f"Invalid scheme '{base_url.scheme}'"
+        """
+        Validate appropriate scheme for HTTP request
+        """
+        assert (
+            base_url.scheme.lower() in ['http', 'https'],
+            f"Invalid scheme '{base_url.scheme}'"
+        )
         return base_url
 
 
@@ -160,5 +181,11 @@ class PiWebWebsocketUrl(PiWebUrl):
     """
     @validator('base_url')
     def _validate_scheme(cls, base_url: AnyUrl) -> AnyUrl:
-        assert base_url.scheme.lower() in ['ws', 'wss'], f"Invalid scheme '{base_url.scheme}'"
+        """
+        Validate appropriate scheme for Websocket request
+        """
+        assert (
+            base_url.scheme.lower() in ['ws', 'wss'],
+            f"Invalid scheme '{base_url.scheme}'"
+        )
         return base_url
